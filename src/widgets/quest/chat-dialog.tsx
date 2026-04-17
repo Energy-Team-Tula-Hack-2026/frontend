@@ -15,8 +15,8 @@ import { Input } from '@/shared/components/ui/input'
 import { Button } from '@/shared/components/ui/button'
 import { Spinner } from '@/shared/components/ui/spinner'
 import { Bot, Send } from 'lucide-react'
-import { getChatByPointId } from '@/shared/api/chat'
 import type { ChatMessage } from '@/shared/types'
+import { getChatByPointId } from '@/shared/api/chat'
 
 type WsStatus = 'connecting' | 'open' | 'closed' | 'error'
 
