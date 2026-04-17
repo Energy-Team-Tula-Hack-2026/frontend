@@ -1,0 +1,103 @@
+name: Release
+
+on:
+    push:
+        branches: [main]
+
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build-and-push:
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Create .env file
+              run: |
+                  cat > .env << 'EOF'
+                  DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+                  DOMAIN_BASE=${{ secrets.DOMAIN_BASE }}
+                  NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+                  NEXT_PUBLIC_OAUTH_REDIRECT_URL=${{ vars.NEXT_PUBLIC_OAUTH_REDIRECT_URL }}
+                  EOF
+
+                  echo "✅ .env file created with $(wc -l < .env) variables"
+                  echo "📋 Variables loaded:"
+                  cat .env | cut -d= -f1 | while read var; do echo "  - $var"; done
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v2
+
+            - name: Login to Docker Hub
+              uses: docker/login-action@v2
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            - name: Build and push Docker image
+              uses: docker/build-push-action@v4
+              with:
+                  context: .
+                  push: true
+                  no-cache: true
+                  tags: |
+                      ${{ secrets.DOCKERHUB_USERNAME }}/tula-hack-2026-frontend:latest
+                      ${{ secrets.DOCKERHUB_USERNAME }}/tula-hack-2026-frontend:${{ github.sha }}
+
+    deploy:
+        needs: [build-and-push]
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Create .env file
+              run: |
+                  cat > .env << 'EOF'
+                  DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+                  DOMAIN_BASE=${{ secrets.DOMAIN_BASE }}
+                  NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+                  NEXT_PUBLIC_OAUTH_REDIRECT_URL=${{ vars.NEXT_PUBLIC_OAUTH_REDIRECT_URL }}
+                  EOF
+
+                  echo "✅ .env file created with $(wc -l < .env) variables"
+                  echo "📋 Variables loaded:"
+                  cat .env | cut -d= -f1 | while read var; do echo "  - $var"; done
+
+            - name: Copy files to VPS
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                  host: ${{ secrets.VPS_HOST }}
+                  username: ${{ secrets.VPS_USER }}
+                  key: ${{ secrets.VPS_SSH_KEY }}
+                  source: 'docker-compose.prod.yml,.env'
+                  target: '/tula-hack-2026-frontend'
+
+            - name: Deploy to VPS
+              uses: appleboy/ssh-action@v0.1.10
+              with:
+                  host: ${{ secrets.VPS_HOST }}
+                  username: ${{ secrets.VPS_USER }}
+                  key: ${{ secrets.VPS_SSH_KEY }}
+                  script: |
+                      echo "🚀 Starting deployment process..."
+                      echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+                      cd /tula-hack-2026-frontend
+                      echo "🧹 Stopping application containers..."
+                      docker compose -f docker-compose.prod.yml down --remove-orphans || true
+                      echo "🧹 Removing old application images..."
+                      docker images --filter=reference="*tula-hack-2026-frontend*" -q | xargs -r docker rmi -f || true
+                      echo "🚀 Pulling fresh image..."
+                      docker pull ${{ secrets.DOCKERHUB_USERNAME }}/tula-hack-2026-frontend:latest
+                      echo "🚀 Starting services..."
+                      docker compose -f docker-compose.prod.yml up -d --force-recreate
+                      echo "⏳ Waiting for services to start..."
+                      sleep 15
+                      echo "✅ Deployment completed successfully!"
+                      echo "📊 Running containers:"
+                      docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

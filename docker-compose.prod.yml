@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+    frontend:
+        image: ${DOCKERHUB_USERNAME}/tula-hack-2026-frontend:latest
+        container_name: tula-hack-2026-frontend
+        env_file:
+            - .env
+        labels:
+            - 'traefik.enable=true'
+            - 'traefik.http.routers.hack-frontend.rule=Host(`${DOMAIN_BASE}`)'
+            - 'traefik.http.routers.hack-frontend.entrypoints=websecure'
+            - 'traefik.http.routers.hack-frontend.tls.certresolver=letsencrypt'
+            - 'traefik.http.services.hack-frontend.loadbalancer.server.port=3000'
+        ports:
+            - '3000:3000'
+        networks:
+            - my_network
+
+networks:
+    my_network:
+        external: true
+        name: vps-network

@@ -1,0 +1,14 @@
+rules:
+    - name: Protect main branch
+      branches: [main]
+      required_status_checks:
+          strict: true
+          contexts:
+              - validate
+              - test
+              - secrets
+      required_pull_request_reviews: null
+      restrictions: null
+      enforce_admins: true
+      allow_force_pushes: false
+      allow_deletions: false
