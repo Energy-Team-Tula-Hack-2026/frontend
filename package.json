@@ -7,8 +7,7 @@
 		"types": "tsc --noEmit",
 		"build": "next build",
 		"start": "next start",
-		"lint": "eslint .",
-		"prettify": "prettier --log-level warn --cache --write .",
+		"prettify": "prettier --log-level warn --cache --write \"src/**/*.{ts,tsx,js,json,yml,scss}\"",
 		"lint-staged": "lint-staged",
 		"prepare": "husky"
 	},
