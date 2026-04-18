@@ -9,18 +9,6 @@ export type QuestCategory = {
 	created_at?: string
 	updated_at?: string
 }
-export type QuestLocationCity = {
-	id: string
-	name: string
-	region_id: string
-}
-
-export type QuestLocationRegion = {
-	id: string
-	name: string
-	cities: QuestLocationCity[]
-}
-
 export type QuestPointDto = {
 	id: string
 	quest_id: string
@@ -112,17 +100,6 @@ export async function getQuestCategories(): Promise<QuestCategory[]> {
 	}
 }
 
-export async function getQuestLocations(): Promise<QuestLocationRegion[]> {
-	try {
-		const response = await api.get(`${API_PREFIX}/quest/location`)
-		return response.data
-	} catch (error) {
-		throw normalizeApiError(
-			error,
-			'Не удалось загрузить список регионов и городов'
-		)
-	}
-}
 export async function getQuests(): Promise<QuestDto[]> {
 	try {
 		const response = await api.get(`${API_PREFIX}/quest/`)

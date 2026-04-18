@@ -75,10 +75,8 @@ import { getMe } from '@/shared/api/user'
 import {
 	getQuests,
 	getQuestCategories,
-	getQuestLocations,
 	type QuestDto,
 	type QuestCategory,
-	type QuestLocationRegion,
 	getQuestById
 } from '@/shared/api/quest'
 import { TokenManager } from '@/shared/api/auth'
@@ -170,7 +168,7 @@ type CreateQuestRequest = {
 	category_id: string
 	latitude: number
 	longitude: number
-	city_id: string
+	city: string
 	duration_min: number
 	level: 'EASY' | 'MEDIUM' | 'HARD'
 }
@@ -181,7 +179,7 @@ type UpdateQuestRequest = {
 	category_id: string
 	latitude: number
 	longitude: number
-	city_id: string
+	city: string
 	duration_min: number
 	level: 'EASY' | 'MEDIUM' | 'HARD'
 }
@@ -386,9 +384,6 @@ export default function AdminPage() {
 	const [quests, setQuests] = useState<UiQuest[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
 	const [categories, setCategories] = useState<QuestCategory[]>([])
-	const [locationRegions, setLocationRegions] = useState<
-		QuestLocationRegion[]
-	>([])
 	const [cityDefaultQuery, setCityDefaultQuery] = useState('')
 	const dadataUid = useId()
 	const [isCreateQuestDialogOpen, setIsCreateQuestDialogOpen] =
@@ -467,7 +462,6 @@ export default function AdminPage() {
 					await Promise.all([
 						loadQuests(),
 						loadCategories(),
-						loadLocations(),
 						loadAchievements()
 					])
 				} else {
@@ -516,19 +510,6 @@ export default function AdminPage() {
 			const apiError = normalizeApiError(
 				error,
 				'Не удалось загрузить категории'
-			)
-			toast.error(apiError.message)
-		}
-	}
-
-	const loadLocations = async () => {
-		try {
-			const data = await getQuestLocations()
-			setLocationRegions(data)
-		} catch (error) {
-			const apiError = normalizeApiError(
-				error,
-				'Не удалось загрузить список регионов и городов'
 			)
 			toast.error(apiError.message)
 		}
@@ -652,7 +633,7 @@ export default function AdminPage() {
 				category_id: questForm.categoryId,
 				latitude: Number(questForm.latitude || 0),
 				longitude: Number(questForm.longitude || 0),
-				city_id: questForm.cityId,
+				city: questForm.cityId,
 				duration_min: Number(questForm.duration),
 				level: questForm.difficulty
 			}
@@ -754,7 +735,7 @@ export default function AdminPage() {
 				category_id: questForm.categoryId,
 				latitude: Number(questForm.latitude || 0),
 				longitude: Number(questForm.longitude || 0),
-				city_id: questForm.cityId,
+				city: questForm.cityId,
 				duration_min: Number(questForm.duration),
 				level: questForm.difficulty
 			}
@@ -1171,48 +1152,20 @@ export default function AdminPage() {
 		</div>
 	)
 
-	const cityOptions = useMemo(
-		() =>
-			locationRegions.flatMap((region) =>
-				(region.cities ?? []).map((city) => ({
-					id: city.id,
-					name: city.name,
-					label: `${region.name} - ${city.name}`
-				}))
-			),
-		[locationRegions]
-	)
-
-	const cityIdByName = useMemo(() => {
-		const normalize = (value: string) =>
-			value.trim().toLowerCase().replace(/ё/g, 'е')
-		return new Map(
-			cityOptions.map((city) => [normalize(city.name), city.id])
-		)
-	}, [cityOptions])
-
 	const handleCitySuggestionChange = (
 		suggestion?: DaDataSuggestion<DaDataAddress>
 	) => {
-		const suggestedCityName = suggestion?.data?.city || ''
-
+		const suggestedCityName =
+			suggestion?.data?.city || suggestion?.value || ''
 		setCityDefaultQuery(suggestedCityName)
-
-		const normalize = (value: string) =>
-			value.trim().toLowerCase().replace(/ё/g, 'е')
-		const resolvedCityId =
-			cityIdByName.get(normalize(suggestedCityName)) ?? ''
-
 		setQuestForm((prev) => ({
 			...prev,
-			cityId: resolvedCityId
+			cityId: suggestedCityName
 		}))
-
-		if (resolvedCityId && questFormErrors.cityId) {
+		if (suggestedCityName && questFormErrors.cityId) {
 			setQuestFormErrors((prev) => ({ ...prev, cityId: '' }))
 		}
 	}
-
 	const stats = {
 		totalQuests: quests.length,
 		totalPoints: quests.reduce((sum, q) => sum + q.checkpointsCount, 0),
