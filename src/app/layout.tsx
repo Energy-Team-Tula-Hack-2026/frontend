@@ -1,6 +1,7 @@
 ﻿import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
 import './styles/globals.css'
 import { Header } from '@/widgets/header'
@@ -32,7 +33,9 @@ export default function RootLayout({
 				className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
 			>
 				<MainProvider>
-					<RoleAccessGuard />
+					<Suspense fallback={null}>
+						<RoleAccessGuard />
+					</Suspense>
 					<Header />
 
 					<main className="grow">{children}</main>
