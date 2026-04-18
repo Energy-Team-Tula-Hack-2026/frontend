@@ -1,7 +1,7 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,8 +26,16 @@ import {
 	FieldSeparator
 } from '@/shared/components/ui/field'
 import { Spinner } from '@/shared/components/ui/spinner'
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
+} from '@/shared/components/ui/select'
 
 import { login, getOAuthUrl, TokenManager } from '@/shared/api/auth'
+import { loginOrganization } from '@/shared/api/organization'
 import { normalizeApiError } from '@/shared/api/errors'
 
 const loginSchema = z.object({
@@ -38,12 +46,13 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>
 
 export function LoginFormWidget() {
-	console.log('[v0] LoginFormWidget - Rendering')
-
-	const router = useRouter()
+	const searchParams = useSearchParams()
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [showPassword, setShowPassword] = useState(false)
+	const [accountType, setAccountType] = useState<'user' | 'organization'>(
+		'user'
+	)
 
 	const {
 		register,
@@ -54,25 +63,40 @@ export function LoginFormWidget() {
 	})
 
 	const onSubmit = async (data: LoginFormData) => {
-		console.log('[v0] LoginFormWidget - onSubmit called with:', data.email)
 		setIsLoading(true)
 		setError(null)
 
 		try {
-			console.log('[v0] LoginFormWidget - Calling login API')
-			const tokens = await login(data)
+			const tokens =
+				accountType === 'organization'
+					? await loginOrganization({
+							email: data.email,
+							password: data.password
+						})
+					: await login(data)
 
-			console.log(
-				'[v0] LoginFormWidget - Login successful, saving tokens'
-			)
 			TokenManager.saveTokens(tokens)
-			TokenManager.saveAuthMethod('password')
+			TokenManager.saveAuthMethod(
+				accountType === 'organization' ? 'organization' : 'password'
+			)
 
-			toast.success('Успешный вход!')
-			console.log('[v0] LoginFormWidget - Redirecting to /profile')
-			router.push('/profile')
+			toast.success('Успешный вход')
+			const nextParam = searchParams.get('next')
+			const fallbackPath =
+				accountType === 'organization' ? '/admin' : '/profile'
+			const isSafeNext = Boolean(nextParam?.startsWith('/'))
+			const isAllowedForOrganization =
+				accountType !== 'organization' ||
+				nextParam?.startsWith('/admin') ||
+				nextParam?.startsWith('/profile') ||
+				nextParam?.startsWith('/change-password')
+
+			window.location.assign(
+				isSafeNext && isAllowedForOrganization
+					? nextParam!
+					: fallbackPath
+			)
 		} catch (err: unknown) {
-			console.error('[v0] LoginFormWidget - Login error:', err)
 			const apiError = normalizeApiError(
 				err,
 				'Ошибка авторизации. Проверьте email и пароль.'
@@ -85,9 +109,7 @@ export function LoginFormWidget() {
 	}
 
 	const handleOAuth = (provider: 'google' | 'yandex') => {
-		console.log('[v0] LoginFormWidget - OAuth clicked:', provider)
 		const url = getOAuthUrl(provider)
-		console.log('[v0] LoginFormWidget - Redirecting to:', url)
 		window.location.href = url
 	}
 
@@ -99,28 +121,54 @@ export function LoginFormWidget() {
 			</CardHeader>
 			<CardContent>
 				<div className="flex flex-col gap-4">
-					<div className="flex flex-col gap-3">
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full"
-							onClick={() => handleOAuth('google')}
+					<div className="space-y-2">
+						<p className="text-sm font-medium">Тип аккаунта</p>
+						<Select
+							value={accountType}
+							onValueChange={(value: 'user' | 'organization') =>
+								setAccountType(value)
+							}
 						>
-							<GoogleIcon className="size-5" />
-							Войти через Google
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full"
-							onClick={() => handleOAuth('yandex')}
-						>
-							<YandexIcon className="size-5" />
-							Войти через Яндекс
-						</Button>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="user">
+									Пользователь
+								</SelectItem>
+								<SelectItem value="organization">
+									Организатор
+								</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
-					<FieldSeparator>или</FieldSeparator>
+					{accountType === 'user' && (
+						<>
+							<div className="flex flex-col gap-3">
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full"
+									onClick={() => handleOAuth('google')}
+								>
+									<GoogleIcon className="size-5" />
+									Войти через Google
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full"
+									onClick={() => handleOAuth('yandex')}
+								>
+									<YandexIcon className="size-5" />
+									Войти через Яндекс
+								</Button>
+							</div>
+
+							<FieldSeparator>или</FieldSeparator>
+						</>
+					)}
 
 					<form onSubmit={handleSubmit(onSubmit)}>
 						<FieldGroup>

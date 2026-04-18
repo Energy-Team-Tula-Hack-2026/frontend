@@ -9,7 +9,7 @@ import type {
 
 const API_PREFIX = '/api/v2'
 
-export type AuthMethod = 'password' | 'oauth'
+export type AuthMethod = 'password' | 'oauth' | 'organization'
 
 // Get OAuth redirect URL
 export function getOAuthUrl(
@@ -219,7 +219,11 @@ export const TokenManager = {
 		if (typeof window === 'undefined') return null
 
 		const method = localStorage.getItem('auth_method')
-		if (method === 'password' || method === 'oauth') {
+		if (
+			method === 'password' ||
+			method === 'oauth' ||
+			method === 'organization'
+		) {
 			return method
 		}
 

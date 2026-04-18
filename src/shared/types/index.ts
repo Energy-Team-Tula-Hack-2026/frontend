@@ -65,10 +65,13 @@ export type User = {
 		| 'visitor'
 		| 'seller_ip'
 		| 'seller_org'
+		| 'organizer'
 		| 'platform_admin'
 		| 'user'
 		| 'admin'
 	avatar_url?: string
+	description?: string
+	website_link?: string
 	is_known_password?: boolean
 	accounts?: Array<{
 		id: string

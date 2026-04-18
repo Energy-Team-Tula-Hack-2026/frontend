@@ -57,3 +57,15 @@ export async function completeProfile(data: {
 		throw error
 	}
 }
+
+// Delete current user
+export async function deleteMe(): Promise<void> {
+	console.log('[v0] deleteMe - Deleting current user')
+	try {
+		await api.delete(`${API_PREFIX}/users/me`)
+		console.log('[v0] deleteMe - Success')
+	} catch (error) {
+		console.error('[v0] deleteMe - Error:', error)
+		throw error
+	}
+}

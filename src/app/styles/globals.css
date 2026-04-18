@@ -171,7 +171,13 @@
 		width: 100%;
 	}
 
+	.dadata-city-container > div {
+		width: 100%;
+	}
+
 	.dadata-city-container input {
+		width: 100% !important;
+		display: block;
 		background: var(--background) !important;
 		color: var(--foreground) !important;
 		border-color: var(--input) !important;
@@ -197,6 +203,7 @@
 	.dadata-city-suggestion {
 		display: block !important;
 		width: 100% !important;
+		min-width: 100%;
 		box-sizing: border-box;
 		padding: 0.55rem 0.75rem;
 		font-size: 0.875rem;
