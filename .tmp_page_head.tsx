@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -297,7 +297,7 @@ export default function HomePage() {
 				</div>
 
 				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-5">
+					<CardContent className="grid gap-3 p-4 md:grid-cols-4">
 						<div className="relative md:col-span-2">
 							<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 							<Input
@@ -313,7 +313,7 @@ export default function HomePage() {
 							value={productCategory}
 							onValueChange={setProductCategory}
 						>
-							<SelectTrigger className="w-full">
+							<SelectTrigger>
 								<SelectValue placeholder="Категория" />
 							</SelectTrigger>
 							<SelectContent>
@@ -328,62 +328,54 @@ export default function HomePage() {
 								<SelectItem value="Посуда">Посуда</SelectItem>
 							</SelectContent>
 						</Select>
-						<div className="md:col-span-2">
-							<Select
-								value={productSeller}
-								onValueChange={setProductSeller}
-							>
-								<SelectTrigger className="w-full min-w-0">
-									<SelectValue placeholder="Продавец" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">
-										Все продавцы
-									</SelectItem>
-									<SelectItem value="organization">
-										Организации
-									</SelectItem>
-									<SelectItem value="user">
-										Пользователи
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
+						<Select
+							value={productSeller}
+							onValueChange={setProductSeller}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Продавец" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									Все продавцы
+								</SelectItem>
+								<SelectItem value="organization">
+									Организации
+								</SelectItem>
+								<SelectItem value="user">
+									Пользователи
+								</SelectItem>
+							</SelectContent>
+						</Select>
 					</CardContent>
 				</Card>
 
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
 					{featuredProducts.map((product) => (
-						<Card
-							key={product.id}
-							className="group h-full overflow-hidden border-amber-100/80 bg-white/90 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900/70"
-						>
+						<Card key={product.id} className="overflow-hidden">
 							<img
 								src={
 									product.images[0] || '/placeholder-logo.png'
 								}
 								alt={product.title}
-								className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+								className="h-36 w-full object-cover"
 							/>
-							<CardContent className="flex h-[225px] flex-col gap-2 p-4">
+							<CardContent className="space-y-2 p-4">
 								<p className="line-clamp-1 font-semibold">
 									{product.title}
 								</p>
-								<p className="text-muted-foreground line-clamp-3 text-sm">
+								<p className="text-muted-foreground line-clamp-2 text-sm">
 									{product.description}
 								</p>
-								<div className="mt-1 flex items-center justify-between">
+								<div className="flex items-center justify-between">
 									<Badge variant="secondary">
 										{product.category}
 									</Badge>
-									<span className="text-base font-semibold">
+									<span className="font-semibold">
 										{product.priceRub} ₽
 									</span>
 								</div>
-								<Link
-									href={`/shop/${product.id}`}
-									className="mt-auto"
-								>
+								<Link href={`/shop/${product.id}`}>
 									<Button size="sm" className="w-full">
 										Открыть товар
 									</Button>
