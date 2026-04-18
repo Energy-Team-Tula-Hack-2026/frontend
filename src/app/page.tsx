@@ -230,7 +230,7 @@ export default function HomePage() {
 			<section className="space-y-4">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<h2 className="text-2xl font-semibold">
-						Ремесленные предприятия
+						Квесты от ремесленных предприятий
 					</h2>
 					<Badge variant="outline">{filteredQuests.length}</Badge>
 				</div>
@@ -244,7 +244,7 @@ export default function HomePage() {
 								onChange={(e) =>
 									setEnterpriseSearch(e.target.value)
 								}
-								placeholder="Поиск предприятия или ремесла"
+								placeholder="Поиск квеста, предприятия или ремесла"
 								className="pl-9"
 							/>
 						</div>
@@ -287,7 +287,7 @@ export default function HomePage() {
 					</CardContent>
 				</Card>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+				<div className="grid auto-rows-fr grid-cols-1 gap-4 md:grid-cols-3">
 					{isLoadingQuests &&
 						Array.from({ length: 3 }).map((_, index) => (
 							<Card key={`home-quest-skeleton-${index}`}>
@@ -307,7 +307,7 @@ export default function HomePage() {
 					{filteredQuests.map((quest) => (
 						<Card
 							key={quest.id}
-							className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
+							className="h-full border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
 						>
 							{(() => {
 								const images = [
@@ -363,7 +363,7 @@ export default function HomePage() {
 									{quest.description}
 								</CardDescription>
 							</CardHeader>
-							<CardContent className="space-y-2 text-sm">
+							<CardContent className="flex flex-1 flex-col gap-2 text-sm">
 								<div className="flex items-center justify-between">
 									<span className="text-muted-foreground">
 										Уровень
@@ -391,7 +391,7 @@ export default function HomePage() {
 								</div>
 								<Link
 									href={`/routes/${quest.id}`}
-									className="inline-flex pt-2"
+									className="mt-auto inline-flex pt-2"
 								>
 									<Button variant="outline" size="sm">
 										Подробнее
