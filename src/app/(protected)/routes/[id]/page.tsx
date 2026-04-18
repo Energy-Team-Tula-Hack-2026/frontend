@@ -351,10 +351,14 @@ export default function RouteEnterprisePage() {
 		setIsSubmittingFeedback(true)
 		try {
 			if (editingFeedback) {
-				await changeQuestFeedback(editingFeedback.id, {
-					score: feedbackScore,
-					text: feedbackText.trim()
-				})
+				await changeQuestFeedback(
+					editingFeedback.id,
+					editingFeedback.quest_id,
+					{
+						score: feedbackScore,
+						text: feedbackText.trim()
+					}
+				)
 				toast.success('Отзыв успешно обновлен')
 			} else {
 				await createQuestFeedback(quest.id, {
@@ -384,7 +388,10 @@ export default function RouteEnterprisePage() {
 		if (!editingFeedback) return
 		setIsSubmittingFeedback(true)
 		try {
-			await deleteQuestFeedback(editingFeedback.id)
+			await deleteQuestFeedback(
+				editingFeedback.id,
+				editingFeedback.quest_id
+			)
 			toast.success('Отзыв успешно удален')
 			await reloadData()
 			setDeleteDialogOpen(false)

@@ -33,12 +33,16 @@ export async function createQuestFeedback(
 
 export async function changeQuestFeedback(
 	feedback_id: string,
+	quest_id: string,
 	data: FeedBackQuestCreate
 ): Promise<FeedBackQuestCreateResponse> {
 	try {
 		const response = await api.patch(
 			`${API_PREFIX}/quest/feedback/${feedback_id}`,
-			data
+			data,
+			{
+				params: { quest_id }
+			}
 		)
 		return response.data
 	} catch (error) {
@@ -46,9 +50,14 @@ export async function changeQuestFeedback(
 	}
 }
 
-export async function deleteQuestFeedback(feedback_id: string): Promise<void> {
+export async function deleteQuestFeedback(
+	feedback_id: string,
+	quest_id: string
+): Promise<void> {
 	try {
-		await api.delete(`${API_PREFIX}/quest/feedback/${feedback_id}`)
+		await api.delete(`${API_PREFIX}/quest/feedback/${feedback_id}`, {
+			params: { quest_id }
+		})
 	} catch (error) {
 		throw normalizeApiError(error, 'Не удалось удалить отзыв')
 	}
