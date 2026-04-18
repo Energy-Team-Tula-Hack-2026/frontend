@@ -324,6 +324,7 @@ export default function ProfilePage() {
 						</div>
 						<Button
 							variant="ghost"
+							className="w-full sm:w-auto"
 							onClick={() => {
 								TokenManager.clearTokens()
 								mutate(null, false)
@@ -422,8 +423,9 @@ export default function ProfilePage() {
 								</Button>
 							</div>
 						</div>
-						<div className="flex flex-wrap gap-2 pt-2">
+						<div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap">
 							<Button
+								className="w-full sm:w-auto"
 								onClick={handleOrganizationSave}
 								disabled={isSavingOrganization}
 							>
@@ -433,12 +435,14 @@ export default function ProfilePage() {
 							</Button>
 							<Button
 								variant="outline"
+								className="w-full sm:w-auto"
 								onClick={() => router.push('/change-password')}
 							>
 								Сменить пароль
 							</Button>
 							<Button
 								variant="destructive"
+								className="w-full sm:w-auto"
 								onClick={() => setIsDeleteDialogOpen(true)}
 							>
 								Удалить аккаунт
@@ -531,9 +535,10 @@ export default function ProfilePage() {
 							</Badge>
 						</div>
 					</div>
-					<div className="flex gap-2">
+					<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
 						<Button
 							variant="outline"
+							className="w-full sm:w-auto"
 							onClick={() => setIsEditing(true)}
 						>
 							<Pencil className="mr-2 h-4 w-4" />
@@ -541,12 +546,14 @@ export default function ProfilePage() {
 						</Button>
 						<Button
 							variant="outline"
+							className="w-full sm:w-auto"
 							onClick={() => router.push('/change-password')}
 						>
 							Сменить пароль
 						</Button>
 						<Button
 							variant="ghost"
+							className="w-full sm:w-auto"
 							onClick={() => {
 								TokenManager.clearTokens()
 								localStorage.removeItem('oauth_is_new_user')
@@ -559,6 +566,7 @@ export default function ProfilePage() {
 						</Button>
 						<Button
 							variant="destructive"
+							className="w-full sm:w-auto"
 							onClick={() => setIsDeleteDialogOpen(true)}
 						>
 							Удалить аккаунт
