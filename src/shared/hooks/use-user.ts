@@ -3,6 +3,7 @@
 import useSWR from 'swr'
 import { getMe } from '@/shared/api/user'
 import { TokenManager } from '@/shared/api/auth'
+import { getOrganizationMe } from '@/shared/api/organization'
 import type { User } from '@/shared/types'
 
 export function useUser() {
@@ -20,11 +21,26 @@ export function useUser() {
 		isLoading,
 		mutate
 	} = useSWR<User | null>(
-		hasToken ? 'current-user' : null,
+		hasToken ? `current-user:${authMethod ?? 'unknown'}` : null,
 		async () => {
 			console.log('[v0] useUser - Fetcher called, getting user data')
 
 			try {
+				if (authMethod === 'organization') {
+					const orgData = await getOrganizationMe()
+					const normalizedOrgUser: User = {
+						id: orgData.id,
+						name: orgData.name,
+						surname: '',
+						email: orgData.email,
+						role: 'organizer',
+						avatar_url: orgData.avatar_url,
+						description: orgData.description,
+						website_link: orgData.website_link
+					}
+					return normalizedOrgUser
+				}
+
 				const userData = await getMe()
 				console.log(
 					'[v0] useUser - User data received:',

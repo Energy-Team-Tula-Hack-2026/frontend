@@ -26,6 +26,8 @@ import {
 import { Spinner } from '@/shared/components/ui/spinner'
 
 import { changePassword } from '@/shared/api/auth'
+import { requestOrganizationPasswordChange } from '@/shared/api/organization'
+import { TokenManager } from '@/shared/api/auth'
 import { useUser } from '@/shared/hooks/use-user'
 import { normalizeApiError } from '@/shared/api/errors'
 
@@ -48,6 +50,9 @@ export function ChangePasswordFormWidget() {
 
 	const router = useRouter()
 	const { user, isLoading: isUserLoading, isAuthenticated } = useUser()
+	const authMethod = TokenManager.getAuthMethod()
+	const isOrganizationAuth =
+		authMethod === 'organization' || user?.role === 'organizer'
 
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [submitError, setSubmitError] = useState<string | null>(null)
@@ -87,8 +92,20 @@ export function ChangePasswordFormWidget() {
 				'[v0] ChangePasswordFormWidget - Saving pending password change data'
 			)
 
+			if (typeof window !== 'undefined') {
+				if (isOrganizationAuth) {
+					sessionStorage.removeItem('pending_password_change')
+				} else {
+					sessionStorage.removeItem(
+						'pending_organization_password_change'
+					)
+				}
+			}
+
 			sessionStorage.setItem(
-				'pending_password_change',
+				isOrganizationAuth
+					? 'pending_organization_password_change'
+					: 'pending_password_change',
 				JSON.stringify({
 					newPassword: data.newPassword
 				})
@@ -97,7 +114,11 @@ export function ChangePasswordFormWidget() {
 			console.log(
 				'[v0] ChangePasswordFormWidget - Requesting password change code'
 			)
-			await changePassword(data.newPassword)
+			if (isOrganizationAuth) {
+				await requestOrganizationPasswordChange(data.newPassword)
+			} else {
+				await changePassword(data.newPassword)
+			}
 
 			toast.success('Код подтверждения отправлен на email')
 
@@ -105,7 +126,11 @@ export function ChangePasswordFormWidget() {
 				'[v0] ChangePasswordFormWidget - Redirecting to verify page'
 			)
 			router.push(
-				`/verify?mode=change-password&email=${encodeURIComponent(user.email)}`
+				`/verify?mode=${
+					isOrganizationAuth
+						? 'change-password-organization'
+						: 'change-password'
+				}&email=${encodeURIComponent(user.email)}`
 			)
 		} catch (err: unknown) {
 			console.error('[v0] ChangePasswordFormWidget - Request error:', err)

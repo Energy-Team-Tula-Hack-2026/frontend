@@ -4,6 +4,7 @@ import Link from 'next/link'
 
 import './styles/globals.css'
 import { Header } from '@/widgets/header'
+import { RoleAccessGuard } from '@/widgets/role-access-guard'
 import { MainProvider } from './providers'
 
 const geistSans = Geist({
@@ -31,6 +32,7 @@ export default function RootLayout({
 				className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
 			>
 				<MainProvider>
+					<RoleAccessGuard />
 					<Header />
 
 					<main className="grow">{children}</main>

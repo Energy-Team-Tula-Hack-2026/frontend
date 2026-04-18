@@ -69,6 +69,7 @@ import {
 	CardTitle
 } from '@/shared/components/ui/card'
 import { getMe } from '@/shared/api/user'
+import { getOrganizationMe } from '@/shared/api/organization'
 import {
 	getQuests,
 	getQuestCategories,
@@ -93,10 +94,11 @@ const RULE_TYPE_OPTIONS = [
 const TOKEN_DADATA = '7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d'
 
 type MeResponse = {
+	id?: string
 	name: string
-	surname: string
+	surname?: string
 	email: string
-	role: 'user' | 'admin'
+	role: 'user' | 'admin' | 'organizer'
 	avatar_url?: string
 }
 
@@ -377,8 +379,30 @@ function cityToSuggestion(
 	}
 }
 
+function extractQuestOwnerId(quest: QuestDto): string | null {
+	const candidate = quest as QuestDto & {
+		organization_id?: string
+		owner_id?: string
+		created_by?: string
+		created_by_id?: string
+		organization?: { id?: string }
+		owner?: { id?: string }
+	}
+
+	return (
+		candidate.organization_id ||
+		candidate.owner_id ||
+		candidate.created_by ||
+		candidate.created_by_id ||
+		candidate.organization?.id ||
+		candidate.owner?.id ||
+		null
+	)
+}
+
 export default function AdminPage() {
 	const router = useRouter()
+	const isOrganizerSession = TokenManager.getAuthMethod() === 'organization'
 	const [isLoading, setIsLoading] = useState(true)
 	const [isAuthorized, setIsAuthorized] = useState(false)
 	const [activeTab, setActiveTab] = useState('quests')
@@ -386,6 +410,9 @@ export default function AdminPage() {
 	const [quests, setQuests] = useState<UiQuest[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
 	const [categories, setCategories] = useState<QuestCategory[]>([])
+	const [currentOrganizationId, setCurrentOrganizationId] = useState<
+		string | null
+	>(null)
 	const dadataUid = useId()
 	const [citySuggestion, setCitySuggestion] = useState<
 		DaDataSuggestion<DaDataAddress> | undefined
@@ -455,14 +482,30 @@ export default function AdminPage() {
 			}
 
 			try {
-				const user = (await getMe()) as MeResponse
+				const authMethod = TokenManager.getAuthMethod()
+				const user =
+					authMethod === 'organization'
+						? ({
+								...(await getOrganizationMe()),
+								role: 'organizer'
+							} as MeResponse)
+						: ((await getMe()) as MeResponse)
 
-				if (user.role === 'admin') {
+				if (user.role === 'admin' || user.role === 'organizer') {
 					setIsAuthorized(true)
+					if (authMethod === 'organization') {
+						setCurrentOrganizationId(user.id || null)
+					}
 					await Promise.all([
-						loadQuests(),
+						loadQuests(
+							authMethod === 'organization'
+								? user.id || null
+								: null
+						),
 						loadCategories(),
-						loadAchievements()
+						...(authMethod === 'organization'
+							? []
+							: [loadAchievements()])
 					])
 				} else {
 					toast.error(
@@ -485,11 +528,25 @@ export default function AdminPage() {
 		checkAdminAccess()
 	}, [router])
 
-	const loadQuests = async () => {
+	const loadQuests = async (organizationId?: string | null) => {
 		setIsLoadingQuests(true)
 		try {
 			const data = await getQuests()
-			setQuests(data.map(mapQuestToUi))
+			const authMethod = TokenManager.getAuthMethod()
+			const isOrganizationAuth = authMethod === 'organization'
+			const effectiveOrganizationId =
+				organizationId ?? currentOrganizationId
+
+			const filteredData =
+				isOrganizationAuth && effectiveOrganizationId
+					? data.filter(
+							(quest) =>
+								extractQuestOwnerId(quest) ===
+								effectiveOrganizationId
+						)
+					: data
+
+			setQuests(filteredData.map(mapQuestToUi))
 		} catch (error) {
 			const apiError = normalizeApiError(
 				error,
@@ -1208,10 +1265,14 @@ export default function AdminPage() {
 						</div>
 						<div>
 							<h1 className="text-foreground text-3xl font-bold">
-								Панель администратора
+								{isOrganizerSession
+									? 'Дашборд организатора'
+									: 'Панель администратора'}
 							</h1>
 							<p className="text-muted-foreground">
-								Управление квестами, точками и достижениями
+								{isOrganizerSession
+									? 'Управление квестами и точками'
+									: 'Управление квестами, точками и достижениями'}
 							</p>
 						</div>
 					</div>
@@ -1297,15 +1358,19 @@ export default function AdminPage() {
 				onValueChange={setActiveTab}
 				className="w-full"
 			>
-				<TabsList className="mb-6 grid w-full grid-cols-2">
+				<TabsList
+					className={`mb-6 grid w-full ${isOrganizerSession ? 'grid-cols-1' : 'grid-cols-2'}`}
+				>
 					<TabsTrigger value="quests">
 						<MapPin className="mr-2 h-4 w-4" />
 						Квесты
 					</TabsTrigger>
-					<TabsTrigger value="achievements">
-						<Trophy className="mr-2 h-4 w-4" />
-						Достижения
-					</TabsTrigger>
+					{!isOrganizerSession && (
+						<TabsTrigger value="achievements">
+							<Trophy className="mr-2 h-4 w-4" />
+							Достижения
+						</TabsTrigger>
+					)}
 				</TabsList>
 
 				<TabsContent value="quests" className="space-y-6">
@@ -1322,7 +1387,7 @@ export default function AdminPage() {
 							}}
 						>
 							<DialogTrigger asChild>
-								<Button className="bg-gradient-to-r from-blue-500 to-purple-600">
+								<Button>
 									<Plus className="mr-2 h-4 w-4" />
 									Создать квест
 								</Button>
@@ -2544,252 +2609,325 @@ export default function AdminPage() {
 					</Card>
 				</TabsContent>
 
-				<TabsContent value="achievements" className="space-y-6">
-					<div className="flex items-center justify-between">
-						<h2 className="text-foreground text-xl font-semibold">
-							Управление достижениями
-						</h2>
+				{!isOrganizerSession && (
+					<TabsContent value="achievements" className="space-y-6">
+						<div className="flex items-center justify-between">
+							<h2 className="text-foreground text-xl font-semibold">
+								Управление достижениями
+							</h2>
 
-						<Dialog
-							open={isCreateAchievementDialogOpen}
-							onOpenChange={(open) => {
-								setIsCreateAchievementDialogOpen(open)
-								if (!open) resetAchievementForm()
-							}}
-						>
-							<DialogTrigger asChild>
-								<Button className="bg-gradient-to-r from-blue-500 to-purple-600">
-									<Plus className="mr-2 h-4 w-4" />
-									Создать достижение
-								</Button>
-							</DialogTrigger>
+							<Dialog
+								open={isCreateAchievementDialogOpen}
+								onOpenChange={(open) => {
+									setIsCreateAchievementDialogOpen(open)
+									if (!open) resetAchievementForm()
+								}}
+							>
+								<DialogTrigger asChild>
+									<Button className="bg-gradient-to-r from-blue-500 to-purple-600">
+										<Plus className="mr-2 h-4 w-4" />
+										Создать достижение
+									</Button>
+								</DialogTrigger>
 
-							<DialogContent className="max-w-2xl">
-								<DialogHeader>
-									<DialogTitle>
-										{editingAchievement
-											? 'Редактировать'
-											: 'Создать'}{' '}
-										достижение
-									</DialogTitle>
-									<DialogDescription>
-										{editingAchievement
-											? 'Измените информацию о достижении'
-											: 'Заполните информацию о новом достижении'}
-									</DialogDescription>
-								</DialogHeader>
+								<DialogContent className="max-w-2xl">
+									<DialogHeader>
+										<DialogTitle>
+											{editingAchievement
+												? 'Редактировать'
+												: 'Создать'}{' '}
+											достижение
+										</DialogTitle>
+										<DialogDescription>
+											{editingAchievement
+												? 'Измените информацию о достижении'
+												: 'Заполните информацию о новом достижении'}
+										</DialogDescription>
+									</DialogHeader>
 
-								<div className="grid max-h-[60vh] gap-4 overflow-y-auto py-4">
-									{renderField(
-										'Название *',
-										'name',
-										<Input
-											value={achievementForm.name}
-											onChange={(e) => {
-												setAchievementForm((prev) => ({
-													...prev,
-													name: e.target.value
-												}))
-												if (
-													achievementFormErrors.name
-												) {
-													setAchievementFormErrors(
+									<div className="grid max-h-[60vh] gap-4 overflow-y-auto py-4">
+										{renderField(
+											'Название *',
+											'name',
+											<Input
+												value={achievementForm.name}
+												onChange={(e) => {
+													setAchievementForm(
 														(prev) => ({
 															...prev,
-															name: ''
+															name: e.target.value
 														})
 													)
-												}
-											}}
-											placeholder="Например: Исследователь"
-										/>,
-										achievementFormErrors.name
-									)}
+													if (
+														achievementFormErrors.name
+													) {
+														setAchievementFormErrors(
+															(prev) => ({
+																...prev,
+																name: ''
+															})
+														)
+													}
+												}}
+												placeholder="Например: Исследователь"
+											/>,
+											achievementFormErrors.name
+										)}
 
-									{renderField(
-										'Описание *',
-										'description',
-										<Textarea
-											rows={2}
-											value={achievementForm.description}
-											onChange={(e) => {
-												setAchievementForm((prev) => ({
-													...prev,
-													description: e.target.value
-												}))
-												if (
-													achievementFormErrors.description
-												) {
-													setAchievementFormErrors(
+										{renderField(
+											'Описание *',
+											'description',
+											<Textarea
+												rows={2}
+												value={
+													achievementForm.description
+												}
+												onChange={(e) => {
+													setAchievementForm(
 														(prev) => ({
 															...prev,
-															description: ''
+															description:
+																e.target.value
 														})
 													)
-												}
-											}}
-											placeholder="Описание достижения"
-										/>,
-										achievementFormErrors.description
-									)}
+													if (
+														achievementFormErrors.description
+													) {
+														setAchievementFormErrors(
+															(prev) => ({
+																...prev,
+																description: ''
+															})
+														)
+													}
+												}}
+												placeholder="Описание достижения"
+											/>,
+											achievementFormErrors.description
+										)}
 
-									<div className="grid gap-2">
-										<Label>Тип правила *</Label>
-										<Select
-											value={achievementForm.rule_type}
-											onValueChange={(v: any) => {
-												const newParams: Record<
-													string,
-													any
-												> = {
-													threshold: 10
+										<div className="grid gap-2">
+											<Label>Тип правила *</Label>
+											<Select
+												value={
+													achievementForm.rule_type
 												}
-												if (
-													v ===
-														'SPECIFIC_QUEST_COMPLETED' ||
-													v === 'POINTS_IN_QUEST'
-												) {
-													newParams.quest_id = ''
-												}
-												setAchievementForm((prev) => ({
-													...prev,
-													rule_type: v,
-													rule_params: newParams
-												}))
-											}}
-										>
-											<SelectTrigger>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{RULE_TYPE_OPTIONS.map(
-													(option) => (
-														<SelectItem
-															key={option.value}
-															value={option.value}
-														>
-															{option.label}
-														</SelectItem>
+												onValueChange={(v: any) => {
+													const newParams: Record<
+														string,
+														any
+													> = {
+														threshold: 10
+													}
+													if (
+														v ===
+															'SPECIFIC_QUEST_COMPLETED' ||
+														v === 'POINTS_IN_QUEST'
+													) {
+														newParams.quest_id = ''
+													}
+													setAchievementForm(
+														(prev) => ({
+															...prev,
+															rule_type: v,
+															rule_params:
+																newParams
+														})
 													)
-												)}
-											</SelectContent>
-										</Select>
-									</div>
-
-									<div className="grid gap-2">
-										{achievementForm.rule_type ===
-										'SPECIFIC_QUEST_COMPLETED' ? (
-											<>
-												<Label>Выберите квест *</Label>
-												<Select
-													value={
-														achievementForm
-															.rule_params
-															.quest_id || ''
-													}
-													onValueChange={(v) => {
-														setAchievementForm(
-															(prev) => ({
-																...prev,
-																rule_params: {
-																	...prev.rule_params,
-																	quest_id: v
-																}
-															})
-														)
-														if (
-															achievementFormErrors.quest_id
-														) {
-															setAchievementFormErrors(
-																(prev) => ({
-																	...prev,
-																	quest_id: ''
-																})
-															)
-														}
-													}}
-												>
-													<SelectTrigger
-														className={
-															achievementFormErrors.quest_id
-																? 'border-red-500'
-																: ''
-														}
-													>
-														<SelectValue placeholder="Выберите квест" />
-													</SelectTrigger>
-													<SelectContent>
-														{quests.map((q) => (
+												}}
+											>
+												<SelectTrigger>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{RULE_TYPE_OPTIONS.map(
+														(option) => (
 															<SelectItem
-																key={q.id}
-																value={q.id}
-															>
-																{q.title}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</>
-										) : achievementForm.rule_type ===
-										  'POINTS_IN_QUEST' ? (
-											<>
-												<Label>Выберите квест *</Label>
-												<Select
-													value={
-														achievementForm
-															.rule_params
-															.quest_id || ''
-													}
-													onValueChange={(v) => {
-														setAchievementForm(
-															(prev) => ({
-																...prev,
-																rule_params: {
-																	...prev.rule_params,
-																	quest_id: v
+																key={
+																	option.value
 																}
-															})
-														)
-														if (
-															achievementFormErrors.quest_id
-														) {
-															setAchievementFormErrors(
-																(prev) => ({
-																	...prev,
-																	quest_id: ''
-																})
-															)
-														}
-													}}
-												>
-													<SelectTrigger
-														className={
-															achievementFormErrors.quest_id
-																? 'border-red-500'
-																: ''
-														}
-													>
-														<SelectValue placeholder="Выберите квест" />
-													</SelectTrigger>
-													<SelectContent>
-														{quests.map((q) => (
-															<SelectItem
-																key={q.id}
-																value={q.id}
+																value={
+																	option.value
+																}
 															>
-																{q.title}
+																{option.label}
 															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
+														)
+													)}
+												</SelectContent>
+											</Select>
+										</div>
 
-												<div className="mt-2 grid gap-2">
+										<div className="grid gap-2">
+											{achievementForm.rule_type ===
+											'SPECIFIC_QUEST_COMPLETED' ? (
+												<>
 													<Label>
-														Количество баллов *
+														Выберите квест *
+													</Label>
+													<Select
+														value={
+															achievementForm
+																.rule_params
+																.quest_id || ''
+														}
+														onValueChange={(v) => {
+															setAchievementForm(
+																(prev) => ({
+																	...prev,
+																	rule_params:
+																		{
+																			...prev.rule_params,
+																			quest_id:
+																				v
+																		}
+																})
+															)
+															if (
+																achievementFormErrors.quest_id
+															) {
+																setAchievementFormErrors(
+																	(prev) => ({
+																		...prev,
+																		quest_id:
+																			''
+																	})
+																)
+															}
+														}}
+													>
+														<SelectTrigger
+															className={
+																achievementFormErrors.quest_id
+																	? 'border-red-500'
+																	: ''
+															}
+														>
+															<SelectValue placeholder="Выберите квест" />
+														</SelectTrigger>
+														<SelectContent>
+															{quests.map((q) => (
+																<SelectItem
+																	key={q.id}
+																	value={q.id}
+																>
+																	{q.title}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+												</>
+											) : achievementForm.rule_type ===
+											  'POINTS_IN_QUEST' ? (
+												<>
+													<Label>
+														Выберите квест *
+													</Label>
+													<Select
+														value={
+															achievementForm
+																.rule_params
+																.quest_id || ''
+														}
+														onValueChange={(v) => {
+															setAchievementForm(
+																(prev) => ({
+																	...prev,
+																	rule_params:
+																		{
+																			...prev.rule_params,
+																			quest_id:
+																				v
+																		}
+																})
+															)
+															if (
+																achievementFormErrors.quest_id
+															) {
+																setAchievementFormErrors(
+																	(prev) => ({
+																		...prev,
+																		quest_id:
+																			''
+																	})
+																)
+															}
+														}}
+													>
+														<SelectTrigger
+															className={
+																achievementFormErrors.quest_id
+																	? 'border-red-500'
+																	: ''
+															}
+														>
+															<SelectValue placeholder="Выберите квест" />
+														</SelectTrigger>
+														<SelectContent>
+															{quests.map((q) => (
+																<SelectItem
+																	key={q.id}
+																	value={q.id}
+																>
+																	{q.title}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+
+													<div className="mt-2 grid gap-2">
+														<Label>
+															Количество баллов *
+														</Label>
+														<Input
+															type="number"
+															placeholder="Например: 1000"
+															value={
+																achievementForm
+																	.rule_params
+																	.threshold
+															}
+															onChange={(e) => {
+																setAchievementForm(
+																	(prev) => ({
+																		...prev,
+																		rule_params:
+																			{
+																				...prev.rule_params,
+																				threshold:
+																					Number(
+																						e
+																							.target
+																							.value
+																					)
+																			}
+																	})
+																)
+																if (
+																	achievementFormErrors.threshold
+																) {
+																	setAchievementFormErrors(
+																		(
+																			prev
+																		) => ({
+																			...prev,
+																			threshold:
+																				''
+																		})
+																	)
+																}
+															}}
+														/>
+													</div>
+												</>
+											) : (
+												<>
+													<Label>
+														Пороговое значение *
 													</Label>
 													<Input
 														type="number"
-														placeholder="Например: 1000"
+														placeholder="Например: 10"
 														value={
 															achievementForm
 																.rule_params
@@ -2824,259 +2962,226 @@ export default function AdminPage() {
 															}
 														}}
 													/>
-												</div>
-											</>
-										) : (
-											<>
-												<Label>
-													Пороговое значение *
-												</Label>
-												<Input
-													type="number"
-													placeholder="Например: 10"
-													value={
-														achievementForm
-															.rule_params
-															.threshold
-													}
-													onChange={(e) => {
-														setAchievementForm(
-															(prev) => ({
-																...prev,
-																rule_params: {
-																	...prev.rule_params,
-																	threshold:
-																		Number(
-																			e
-																				.target
-																				.value
-																		)
-																}
-															})
-														)
-														if (
+												</>
+											)}
+
+											{achievementFormErrors.threshold && (
+												<div className="flex items-center gap-1 text-sm text-red-500">
+													<AlertCircle className="h-4 w-4" />
+													<span>
+														{
 															achievementFormErrors.threshold
-														) {
-															setAchievementFormErrors(
+														}
+													</span>
+												</div>
+											)}
+
+											{achievementFormErrors.quest_id && (
+												<div className="flex items-center gap-1 text-sm text-red-500">
+													<AlertCircle className="h-4 w-4" />
+													<span>
+														{
+															achievementFormErrors.quest_id
+														}
+													</span>
+												</div>
+											)}
+										</div>
+
+										<div className="grid gap-2">
+											<Label>Изображение</Label>
+											<Input
+												type="file"
+												accept="image/*"
+												onChange={(e) => {
+													const file =
+														e.target.files?.[0]
+													if (file) {
+														setAchievementImageFile(
+															file
+														)
+														setAchievementImagePreview(
+															URL.createObjectURL(
+																file
+															)
+														)
+													}
+												}}
+											/>
+
+											{achievementImagePreview && (
+												<div className="relative mt-2 h-24 w-24">
+													<img
+														src={
+															achievementImagePreview
+														}
+														className="h-full w-full rounded-lg object-cover"
+														alt=""
+													/>
+													<button
+														type="button"
+														onClick={() => {
+															setAchievementImageFile(
+																null
+															)
+															setAchievementImagePreview(
+																''
+															)
+															setAchievementForm(
 																(prev) => ({
 																	...prev,
-																	threshold:
+																	image_url:
 																		''
 																})
 															)
-														}
-													}}
-												/>
-											</>
-										)}
-
-										{achievementFormErrors.threshold && (
-											<div className="flex items-center gap-1 text-sm text-red-500">
-												<AlertCircle className="h-4 w-4" />
-												<span>
-													{
-														achievementFormErrors.threshold
-													}
-												</span>
-											</div>
-										)}
-
-										{achievementFormErrors.quest_id && (
-											<div className="flex items-center gap-1 text-sm text-red-500">
-												<AlertCircle className="h-4 w-4" />
-												<span>
-													{
-														achievementFormErrors.quest_id
-													}
-												</span>
-											</div>
-										)}
+														}}
+														className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 hover:bg-red-600"
+													>
+														<X className="h-3 w-3 text-white" />
+													</button>
+												</div>
+											)}
+										</div>
 									</div>
 
-									<div className="grid gap-2">
-										<Label>Изображение</Label>
-										<Input
-											type="file"
-											accept="image/*"
-											onChange={(e) => {
-												const file = e.target.files?.[0]
-												if (file) {
-													setAchievementImageFile(
-														file
-													)
-													setAchievementImagePreview(
-														URL.createObjectURL(
-															file
-														)
-													)
-												}
-											}}
-										/>
+									<DialogFooter>
+										<Button
+											variant="outline"
+											onClick={() =>
+												setIsCreateAchievementDialogOpen(
+													false
+												)
+											}
+										>
+											Отмена
+										</Button>
+										<Button
+											onClick={handleCreateAchievement}
+											disabled={isCreatingAchievement}
+										>
+											{isCreatingAchievement ? (
+												<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+											) : null}
+											{isCreatingAchievement
+												? 'Сохранение...'
+												: 'Сохранить'}
+										</Button>
+									</DialogFooter>
+								</DialogContent>
+							</Dialog>
+						</div>
 
-										{achievementImagePreview && (
-											<div className="relative mt-2 h-24 w-24">
-												<img
-													src={
-														achievementImagePreview
-													}
-													className="h-full w-full rounded-lg object-cover"
-													alt=""
-												/>
-												<button
-													type="button"
-													onClick={() => {
-														setAchievementImageFile(
-															null
-														)
-														setAchievementImagePreview(
-															''
-														)
-														setAchievementForm(
-															(prev) => ({
-																...prev,
-																image_url: ''
-															})
-														)
-													}}
-													className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 hover:bg-red-600"
-												>
-													<X className="h-3 w-3 text-white" />
-												</button>
-											</div>
-										)}
-									</div>
+						<div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+							{isLoadingAchievements ? (
+								<div className="col-span-4 flex justify-center py-8">
+									<Loader2 className="h-6 w-6 animate-spin text-purple-600" />
 								</div>
+							) : achievements.length === 0 ? (
+								<div className="col-span-4 py-8 text-center">
+									<Trophy className="text-muted-foreground mx-auto mb-2 h-10 w-10" />
+									<p className="text-muted-foreground text-sm">
+										Нет достижений
+									</p>
+								</div>
+							) : (
+								achievements.map((ach) => {
+									let ruleText = ''
 
-								<DialogFooter>
-									<Button
-										variant="outline"
-										onClick={() =>
-											setIsCreateAchievementDialogOpen(
-												false
-											)
-										}
-									>
-										Отмена
-									</Button>
-									<Button
-										onClick={handleCreateAchievement}
-										disabled={isCreatingAchievement}
-									>
-										{isCreatingAchievement ? (
-											<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-										) : null}
-										{isCreatingAchievement
-											? 'Сохранение...'
-											: 'Сохранить'}
-									</Button>
-								</DialogFooter>
-							</DialogContent>
-						</Dialog>
-					</div>
+									if (
+										ach.rule_type ===
+										'SPECIFIC_QUEST_COMPLETED'
+									) {
+										const questName = quests.find(
+											(q) =>
+												q.id ===
+												ach.rule_params.quest_id
+										)?.title
+										ruleText = `Квест: ${questName || '?'}`
+									} else if (
+										ach.rule_type === 'POINTS_IN_QUEST'
+									) {
+										const questName = quests.find(
+											(q) =>
+												q.id ===
+												ach.rule_params.quest_id
+										)?.title
+										ruleText = `${ach.rule_params.threshold} баллов в "${questName || '?'}"`
+									} else if (
+										ach.rule_type === 'QUESTS_COMPLETED'
+									) {
+										ruleText = `${ach.rule_params.threshold} квестов`
+									} else if (
+										ach.rule_type === 'TOTAL_SCORE'
+									) {
+										ruleText = `${ach.rule_params.threshold} баллов`
+									}
 
-					<div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-						{isLoadingAchievements ? (
-							<div className="col-span-4 flex justify-center py-8">
-								<Loader2 className="h-6 w-6 animate-spin text-purple-600" />
-							</div>
-						) : achievements.length === 0 ? (
-							<div className="col-span-4 py-8 text-center">
-								<Trophy className="text-muted-foreground mx-auto mb-2 h-10 w-10" />
-								<p className="text-muted-foreground text-sm">
-									Нет достижений
-								</p>
-							</div>
-						) : (
-							achievements.map((ach) => {
-								let ruleText = ''
+									return (
+										<Card
+											key={ach.id}
+											className="overflow-hidden transition-all hover:shadow-md"
+										>
+											<CardContent className="p-3">
+												<div className="flex items-start gap-2">
+													{ach.image_url ? (
+														<img
+															src={ach.image_url}
+															alt={ach.name}
+															className="h-10 w-10 flex-shrink-0 rounded-lg object-cover"
+														/>
+													) : (
+														<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500">
+															<Trophy className="h-5 w-5 text-white" />
+														</div>
+													)}
 
-								if (
-									ach.rule_type === 'SPECIFIC_QUEST_COMPLETED'
-								) {
-									const questName = quests.find(
-										(q) => q.id === ach.rule_params.quest_id
-									)?.title
-									ruleText = `Квест: ${questName || '?'}`
-								} else if (
-									ach.rule_type === 'POINTS_IN_QUEST'
-								) {
-									const questName = quests.find(
-										(q) => q.id === ach.rule_params.quest_id
-									)?.title
-									ruleText = `${ach.rule_params.threshold} баллов в "${questName || '?'}"`
-								} else if (
-									ach.rule_type === 'QUESTS_COMPLETED'
-								) {
-									ruleText = `${ach.rule_params.threshold} квестов`
-								} else if (ach.rule_type === 'TOTAL_SCORE') {
-									ruleText = `${ach.rule_params.threshold} баллов`
-								}
-
-								return (
-									<Card
-										key={ach.id}
-										className="overflow-hidden transition-all hover:shadow-md"
-									>
-										<CardContent className="p-3">
-											<div className="flex items-start gap-2">
-												{ach.image_url ? (
-													<img
-														src={ach.image_url}
-														alt={ach.name}
-														className="h-10 w-10 flex-shrink-0 rounded-lg object-cover"
-													/>
-												) : (
-													<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500">
-														<Trophy className="h-5 w-5 text-white" />
+													<div className="min-w-0 flex-1">
+														<h3 className="truncate text-sm font-semibold">
+															{ach.name}
+														</h3>
+														<p className="text-muted-foreground line-clamp-1 text-xs">
+															{ach.description}
+														</p>
+														<p className="mt-0.5 truncate text-xs text-green-600">
+															{ruleText}
+														</p>
 													</div>
-												)}
 
-												<div className="min-w-0 flex-1">
-													<h3 className="truncate text-sm font-semibold">
-														{ach.name}
-													</h3>
-													<p className="text-muted-foreground line-clamp-1 text-xs">
-														{ach.description}
-													</p>
-													<p className="mt-0.5 truncate text-xs text-green-600">
-														{ruleText}
-													</p>
+													<div className="flex flex-shrink-0 items-center gap-0.5">
+														<Button
+															variant="ghost"
+															size="sm"
+															className="h-7 w-7 p-0 hover:bg-blue-50 dark:hover:bg-blue-950"
+															onClick={() =>
+																handleEditAchievement(
+																	ach
+																)
+															}
+														>
+															<Pencil className="h-3.5 w-3.5" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+															onClick={() =>
+																openDeleteAchievementDialog(
+																	ach
+																)
+															}
+														>
+															<Trash2 className="h-3.5 w-3.5" />
+														</Button>
+													</div>
 												</div>
-
-												<div className="flex flex-shrink-0 items-center gap-0.5">
-													<Button
-														variant="ghost"
-														size="sm"
-														className="h-7 w-7 p-0 hover:bg-blue-50 dark:hover:bg-blue-950"
-														onClick={() =>
-															handleEditAchievement(
-																ach
-															)
-														}
-													>
-														<Pencil className="h-3.5 w-3.5" />
-													</Button>
-													<Button
-														variant="ghost"
-														size="sm"
-														className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-														onClick={() =>
-															openDeleteAchievementDialog(
-																ach
-															)
-														}
-													>
-														<Trash2 className="h-3.5 w-3.5" />
-													</Button>
-												</div>
-											</div>
-										</CardContent>
-									</Card>
-								)
-							})
-						)}
-					</div>
-				</TabsContent>
+											</CardContent>
+										</Card>
+									)
+								})
+							)}
+						</div>
+					</TabsContent>
+				)}
 			</Tabs>
 
 			<Dialog
@@ -3355,7 +3460,7 @@ export default function AdminPage() {
 								</div>
 
 								<div className="grid grid-cols-2 gap-3">
-									<div className="grid gap-1">
+									<div className="сol-span-2 grid gap-1">
 										<Label className="text-xs">Баллы</Label>
 										<Input
 											type="number"
@@ -3364,22 +3469,6 @@ export default function AdminPage() {
 												setPointForm((prev) => ({
 													...prev,
 													score: e.target.value
-												}))
-											}
-										/>
-									</div>
-
-									<div className="grid gap-1">
-										<Label className="text-xs">
-											Порядок
-										</Label>
-										<Input
-											type="number"
-											value={pointForm.priority}
-											onChange={(e) =>
-												setPointForm((prev) => ({
-													...prev,
-													priority: e.target.value
 												}))
 											}
 										/>
@@ -3603,20 +3692,6 @@ export default function AdminPage() {
 										setPointForm((prev) => ({
 											...prev,
 											score: e.target.value
-										}))
-									}
-								/>
-							</div>
-
-							<div className="grid gap-1">
-								<Label className="text-xs">Порядок</Label>
-								<Input
-									type="number"
-									value={pointForm.priority}
-									onChange={(e) =>
-										setPointForm((prev) => ({
-											...prev,
-											priority: e.target.value
 										}))
 									}
 								/>
