@@ -1,16 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-	Award,
-	Camera,
-	Clock,
-	LogOut,
-	Pencil,
-	Route,
-	Sparkles
-} from 'lucide-react'
+import { Award, Camera, LogOut, Pencil, Route } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { useUser } from '@/shared/hooks/use-user'
@@ -87,8 +80,11 @@ export default function ProfilePage() {
 			.map((q) => q.quest_id) || []
 	const activeQuestIds =
 		user?.quests
-			?.filter((quest) => quest.status === 'IN_PROGRESS')
+			?.filter((quest) => quest.status !== 'COMPLETED')
 			.map((quest) => quest.quest_id) || []
+	const userQuestStatusById = new Map(
+		user?.quests?.map((quest) => [quest.quest_id, quest.status]) || []
+	)
 
 	const completedQuests = quests.filter((quest) =>
 		completedQuestIds.includes(quest.id)
@@ -311,25 +307,24 @@ export default function ProfilePage() {
 							</p>
 						)}
 						{activeQuests.map((quest) => (
-							<div
+							<Link
 								key={quest.id}
-								className="rounded-lg border p-3"
+								href={`/quest/${quest.id}`}
+								className="hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
 							>
-								<p className="font-medium">{quest.name}</p>
+								<div className="flex items-start justify-between gap-2">
+									<p className="font-medium">{quest.name}</p>
+									<Badge variant="secondary">
+										{userQuestStatusById.get(quest.id) ===
+										'IN_PROGRESS'
+											? 'В процессе'
+											: 'Зарегистрирован'}
+									</Badge>
+								</div>
 								<p className="text-muted-foreground mt-1 text-sm">
 									{quest.description}
 								</p>
-								<Button
-									size="sm"
-									variant="outline"
-									className="mt-2"
-									onClick={() =>
-										router.push(`/quest/${quest.id}`)
-									}
-								>
-									Продолжить
-								</Button>
-							</div>
+							</Link>
 						))}
 					</CardContent>
 				</Card>
@@ -357,32 +352,19 @@ export default function ProfilePage() {
 							</p>
 						)}
 						{completedQuests.map((quest) => (
-							<div
+							<Link
 								key={quest.id}
-								className="rounded-lg border p-3"
+								href={`/quest/${quest.id}`}
+								className="hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
 							>
 								<div className="flex items-start justify-between gap-2">
-									<div>
-										<p className="font-medium">
-											{quest.name}
-										</p>
-										<p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-											{quest.description}
-										</p>
-									</div>
-									<Badge variant="secondary">
-										<Sparkles className="mr-1 h-3 w-3" />
-										{quest.points.reduce(
-											(sum, p) => sum + p.score,
-											0
-										)}
-									</Badge>
+									<p className="font-medium">{quest.name}</p>
+									<Badge variant="secondary">Завершен</Badge>
 								</div>
-								<div className="text-muted-foreground mt-2 flex items-center gap-2 text-xs">
-									<Clock className="h-3.5 w-3.5" />
-									{quest.duration_min} мин
-								</div>
-							</div>
+								<p className="text-muted-foreground mt-1 text-sm">
+									{quest.description}
+								</p>
+							</Link>
 						))}
 					</CardContent>
 				</Card>
