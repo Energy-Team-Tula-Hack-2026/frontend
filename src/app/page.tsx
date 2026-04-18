@@ -210,7 +210,7 @@ export default function HomePage() {
 					<CardContent className="flex flex-wrap gap-3">
 						<Button onClick={() => handleScannerOpenChange(true)}>
 							<QrCode className="mr-2 h-4 w-4" />
-							Сканировать QR предприятия
+							Сканировать QR организации
 						</Button>
 						<Link href="/shop">
 							<Button variant="outline">
@@ -522,7 +522,7 @@ export default function HomePage() {
 					<DialogHeader>
 						<DialogTitle>Сканирование QR-кода</DialogTitle>
 						<DialogDescription>
-							Сканируйте код музея/предприятия или введите его
+							Сканируйте код музея/организации или введите его
 							вручную.
 						</DialogDescription>
 					</DialogHeader>
