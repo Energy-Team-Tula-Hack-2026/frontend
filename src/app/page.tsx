@@ -15,6 +15,7 @@ import {
 	CardTitle
 } from '@/shared/components/ui/card'
 import { Input } from '@/shared/components/ui/input'
+import { Skeleton } from '@/shared/components/ui/skeleton'
 import {
 	Dialog,
 	DialogContent,
@@ -30,16 +31,28 @@ import {
 	SelectValue
 } from '@/shared/components/ui/select'
 
-import { getQuests, QuestDto } from '@/shared/api/quest'
+import {
+	getQuestCategories,
+	getQuests,
+	QuestCategory,
+	QuestDto
+} from '@/shared/api/quest'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import {
-	CRAFT_ENTERPRISES,
 	CRAFT_PRODUCTS,
 	ENTERPRISE_QR_CODES
 } from '@/shared/lib/craft-marketplace'
+import {
+	Carousel,
+	CarouselContent,
+	CarouselItem,
+	CarouselNext,
+	CarouselPrevious
+} from '@/shared/components/ui/carousel'
 
 export default function HomePage() {
 	const [quests, setQuests] = useState<QuestDto[]>([])
+	const [questCategories, setQuestCategories] = useState<QuestCategory[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
 	const [questsError, setQuestsError] = useState<string | null>(null)
 
@@ -49,6 +62,7 @@ export default function HomePage() {
 
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
+	const [enterpriseCategory, setEnterpriseCategory] = useState<string>('all')
 
 	const [productSearch, setProductSearch] = useState('')
 	const [productCategory, setProductCategory] = useState<string>('all')
@@ -61,9 +75,13 @@ export default function HomePage() {
 			setIsLoadingQuests(true)
 			setQuestsError(null)
 			try {
-				const data = await getQuests()
+				const [questsData, categoriesData] = await Promise.all([
+					getQuests(),
+					getQuestCategories()
+				])
 				if (!isMounted) return
-				setQuests(data)
+				setQuests(questsData)
+				setQuestCategories(categoriesData)
 			} catch (error) {
 				if (!isMounted) return
 				const apiError = normalizeApiError(
@@ -72,6 +90,7 @@ export default function HomePage() {
 				)
 				setQuestsError(apiError.message)
 				setQuests([])
+				setQuestCategories([])
 			} finally {
 				if (isMounted) setIsLoadingQuests(false)
 			}
@@ -83,34 +102,29 @@ export default function HomePage() {
 		}
 	}, [])
 
-	const enterpriseQuestLinks = useMemo(() => {
-		const firstThreeQuestIds = quests.slice(0, 3).map((item) => item.id)
-		return CRAFT_ENTERPRISES.map((item, index) => ({
-			...item,
-			questId: firstThreeQuestIds[index] ?? null
-		}))
-	}, [quests])
-
-	const filteredEnterprises = useMemo(() => {
-		return enterpriseQuestLinks.filter((enterprise) => {
+	const filteredQuests = useMemo(() => {
+		return quests.filter((quest) => {
 			const matchesSearch =
-				enterprise.title
+				quest.name
 					.toLowerCase()
 					.includes(enterpriseSearch.toLowerCase()) ||
-				enterprise.description
+				quest.description
 					.toLowerCase()
 					.includes(enterpriseSearch.toLowerCase())
 
 			const matchesLevel =
 				enterpriseLevel === 'all' ||
-				(enterpriseLevel === 'basic' &&
-					enterprise.level.toLowerCase() === 'базовый') ||
-				(enterpriseLevel === 'medium' &&
-					enterprise.level.toLowerCase() === 'средний')
+				(enterpriseLevel === 'basic' && quest.level === 'EASY') ||
+				(enterpriseLevel === 'medium' && quest.level === 'MEDIUM')
 
-			return matchesSearch && matchesLevel
+			const matchesCategory =
+				enterpriseCategory === 'all' ||
+				quest.category?.id === enterpriseCategory ||
+				quest.category_id === enterpriseCategory
+
+			return matchesSearch && matchesLevel && matchesCategory
 		})
-	}, [enterpriseQuestLinks, enterpriseSearch, enterpriseLevel])
+	}, [quests, enterpriseSearch, enterpriseLevel, enterpriseCategory])
 
 	const filteredProducts = useMemo(() => {
 		return CRAFT_PRODUCTS.filter((product) => {
@@ -195,13 +209,11 @@ export default function HomePage() {
 					<h2 className="text-2xl font-semibold">
 						Ремесленные предприятия
 					</h2>
-					<Badge variant="outline">
-						{filteredEnterprises.length}
-					</Badge>
+					<Badge variant="outline">{filteredQuests.length}</Badge>
 				</div>
 
 				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-3">
+					<CardContent className="grid gap-3 p-4 md:grid-cols-4">
 						<div className="relative md:col-span-2">
 							<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 							<Input
@@ -228,16 +240,104 @@ export default function HomePage() {
 								<SelectItem value="medium">Средний</SelectItem>
 							</SelectContent>
 						</Select>
+						<Select
+							value={enterpriseCategory}
+							onValueChange={setEnterpriseCategory}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Категория" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									Все категории
+								</SelectItem>
+								{questCategories.map((category) => (
+									<SelectItem
+										key={category.id}
+										value={category.id}
+									>
+										{category.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					</CardContent>
 				</Card>
 
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-					{filteredEnterprises.map((enterprise) => (
-						<Card key={enterprise.id}>
+					{isLoadingQuests &&
+						Array.from({ length: 3 }).map((_, index) => (
+							<Card key={`home-quest-skeleton-${index}`}>
+								<Skeleton className="h-40 w-full rounded-t-xl rounded-b-none" />
+								<CardHeader className="space-y-2">
+									<Skeleton className="h-5 w-2/3" />
+									<Skeleton className="h-4 w-full" />
+									<Skeleton className="h-4 w-4/5" />
+								</CardHeader>
+								<CardContent className="space-y-3">
+									<Skeleton className="h-4 w-full" />
+									<Skeleton className="h-4 w-full" />
+									<Skeleton className="h-9 w-24" />
+								</CardContent>
+							</Card>
+						))}
+					{filteredQuests.map((quest) => (
+						<Card
+							key={quest.id}
+							className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
+						>
+							{(() => {
+								const images = [
+									...(quest.images
+										?.map((image) => image.image_url)
+										.filter((url): url is string =>
+											Boolean(url)
+										) ?? []),
+									...(quest.points
+										?.map((point) => point.image_url)
+										.filter((url): url is string =>
+											Boolean(url)
+										) ?? [])
+								]
+								const uniqueImages = Array.from(new Set(images))
+								const finalImages =
+									uniqueImages.length > 0
+										? uniqueImages
+										: ['/placeholder-logo.png']
+
+								return (
+									<div className="relative overflow-hidden rounded-t-xl border-b">
+										<Carousel className="w-full">
+											<CarouselContent className="-ml-0">
+												{finalImages.map(
+													(imageUrl, index) => (
+														<CarouselItem
+															key={`${quest.id}-${imageUrl}-${index}`}
+															className="pl-0"
+														>
+															<img
+																src={imageUrl}
+																alt={`${quest.name} — изображение ${index + 1}`}
+																className="h-40 w-full object-cover"
+															/>
+														</CarouselItem>
+													)
+												)}
+											</CarouselContent>
+											{finalImages.length > 1 && (
+												<>
+													<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
+													<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
+												</>
+											)}
+										</Carousel>
+									</div>
+								)
+							})()}
 							<CardHeader>
-								<CardTitle>{enterprise.title}</CardTitle>
+								<CardTitle>{quest.name}</CardTitle>
 								<CardDescription>
-									{enterprise.description}
+									{quest.description}
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-2 text-sm">
@@ -246,7 +346,16 @@ export default function HomePage() {
 										Уровень
 									</span>
 									<span className="font-medium">
-										{enterprise.level}
+										{quest.level}
+									</span>
+								</div>
+								<div className="flex items-center justify-between">
+									<span className="text-muted-foreground">
+										Категория
+									</span>
+									<span className="font-medium">
+										{quest.category?.name ??
+											'Без категории'}
 									</span>
 								</div>
 								<div className="flex items-center justify-between">
@@ -254,15 +363,11 @@ export default function HomePage() {
 										Время
 									</span>
 									<span className="font-medium">
-										{enterprise.duration}
+										{quest.duration_min ?? 0} минут
 									</span>
 								</div>
 								<Link
-									href={
-										enterprise.questId
-											? `/routes/${enterprise.questId}`
-											: '/crafts'
-									}
+									href={`/routes/${quest.id}`}
 									className="inline-flex pt-2"
 								>
 									<Button variant="outline" size="sm">
@@ -274,11 +379,6 @@ export default function HomePage() {
 					))}
 				</div>
 
-				{isLoadingQuests && (
-					<p className="text-muted-foreground text-sm">
-						Загружаем связку с квестами…
-					</p>
-				)}
 				{questsError && (
 					<p className="text-destructive text-sm">{questsError}</p>
 				)}
