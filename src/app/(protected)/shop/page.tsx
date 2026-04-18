@@ -516,8 +516,7 @@ export default function ShopPage() {
 											{isOutOfStock &&
 												!canContinuePayment && (
 													<p className="text-sm text-red-600">
-														РўРѕРІР°СЂР° РЅРµС‚ РІ
-														РЅР°Р»РёС‡РёРё
+														Товара нет в наличии
 													</p>
 												)}
 											{!isOutOfStock && exceedsStock && (
@@ -551,7 +550,7 @@ export default function ShopPage() {
 														const apiError =
 															normalizeApiError(
 																error,
-																'РќРµ СѓРґР°Р»РѕСЃСЊ РёР·РјРµРЅРёС‚СЊ РєРѕР»РёС‡РµСЃС‚РІРѕ'
+																'Не удалось изменить количество'
 															)
 														toast.error(
 															apiError.message
@@ -782,7 +781,7 @@ export default function ShopPage() {
 												>
 													<img
 														src={getImage(imageUrl)}
-														alt={`${activeItem.title} вЂ” С„РѕС‚Рѕ ${index + 1}`}
+														alt={`${activeItem.title} - фото ${index + 1}`}
 														className="h-52 w-full object-cover md:h-full"
 														onError={(event) => {
 															event.currentTarget.src =

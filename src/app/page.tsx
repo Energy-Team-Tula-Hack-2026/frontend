@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MapPin, QrCode, Search, Sparkles, Store } from 'lucide-react'
+import {
+	CalendarDays,
+	ChevronDown,
+	ChevronUp,
+	MapPin,
+	QrCode,
+	Search,
+	Sparkles,
+	Store
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { normalizeApiError } from '@/shared/api/errors'
@@ -41,6 +50,7 @@ import {
 	registerUserQuest
 } from '@/shared/api/quest'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
+import { EventsCalendarEmbed } from '@/widgets/events/events-calendar-embed'
 import { CRAFT_PRODUCTS } from '@/shared/lib/craft-marketplace'
 import {
 	Carousel,
@@ -64,6 +74,7 @@ export default function HomePage() {
 	const [manualQrCode, setManualQrCode] = useState('')
 	const [scanNotice, setScanNotice] = useState<string | null>(null)
 	const [isStartingQuest, setIsStartingQuest] = useState(false)
+	const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
@@ -225,6 +236,42 @@ export default function HomePage() {
 						{scanNotice}
 					</p>
 				)}
+			</section>
+
+			<section className="space-y-3">
+				<Card>
+					<CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+						<div className="flex items-center gap-2">
+							<CalendarDays className="h-5 w-5 text-orange-600" />
+							<div>
+								<p className="font-semibold">
+									Календарь событий
+								</p>
+								<p className="text-muted-foreground text-sm">
+									Культурные и ремесленные даты по месяцам
+								</p>
+							</div>
+						</div>
+						<Button
+							variant="outline"
+							onClick={() => setIsCalendarOpen((prev) => !prev)}
+						>
+							{isCalendarOpen ? (
+								<>
+									<ChevronUp className="mr-2 h-4 w-4" />
+									Скрыть календарь
+								</>
+							) : (
+								<>
+									<ChevronDown className="mr-2 h-4 w-4" />
+									Показать календарь
+								</>
+							)}
+						</Button>
+					</CardContent>
+				</Card>
+
+				<EventsCalendarEmbed enabled={isCalendarOpen} />
 			</section>
 
 			<section className="space-y-4">
