@@ -1322,7 +1322,7 @@ export default function AdminPage() {
 							}}
 						>
 							<DialogTrigger asChild>
-								<Button className="bg-gradient-to-r from-blue-500 to-purple-600">
+								<Button>
 									<Plus className="mr-2 h-4 w-4" />
 									Создать квест
 								</Button>
@@ -3355,7 +3355,7 @@ export default function AdminPage() {
 								</div>
 
 								<div className="grid grid-cols-2 gap-3">
-									<div className="grid gap-1">
+									<div className="сol-span-2 grid gap-1">
 										<Label className="text-xs">Баллы</Label>
 										<Input
 											type="number"
@@ -3364,22 +3364,6 @@ export default function AdminPage() {
 												setPointForm((prev) => ({
 													...prev,
 													score: e.target.value
-												}))
-											}
-										/>
-									</div>
-
-									<div className="grid gap-1">
-										<Label className="text-xs">
-											Порядок
-										</Label>
-										<Input
-											type="number"
-											value={pointForm.priority}
-											onChange={(e) =>
-												setPointForm((prev) => ({
-													...prev,
-													priority: e.target.value
 												}))
 											}
 										/>
@@ -3603,20 +3587,6 @@ export default function AdminPage() {
 										setPointForm((prev) => ({
 											...prev,
 											score: e.target.value
-										}))
-									}
-								/>
-							</div>
-
-							<div className="grid gap-1">
-								<Label className="text-xs">Порядок</Label>
-								<Input
-									type="number"
-									value={pointForm.priority}
-									onChange={(e) =>
-										setPointForm((prev) => ({
-											...prev,
-											priority: e.target.value
 										}))
 									}
 								/>

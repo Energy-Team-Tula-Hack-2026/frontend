@@ -335,9 +335,7 @@ export function Quest() {
 				<div className="space-y-6 lg:col-span-2">
 					<Card>
 						<CardHeader className="pb-3">
-							<CardTitle className="text-lg">
-								Карта маршрута
-							</CardTitle>
+							<CardTitle className="text-lg">Карта</CardTitle>
 							<CardDescription>
 								На карте отображается организация, где проходит
 								квест.
