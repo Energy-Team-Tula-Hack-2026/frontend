@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { MapPin, QrCode, Search, Sparkles, Store } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { normalizeApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/components/ui/button'
@@ -35,13 +37,11 @@ import {
 	getQuestCategories,
 	getQuests,
 	QuestCategory,
-	QuestDto
+	QuestDto,
+	registerUserQuest
 } from '@/shared/api/quest'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
-import {
-	CRAFT_PRODUCTS,
-	ENTERPRISE_QR_CODES
-} from '@/shared/lib/craft-marketplace'
+import { CRAFT_PRODUCTS } from '@/shared/lib/craft-marketplace'
 import {
 	Carousel,
 	CarouselContent,
@@ -50,7 +50,11 @@ import {
 	CarouselPrevious
 } from '@/shared/components/ui/carousel'
 
+const QUEST_START_ERROR_MESSAGE =
+	'Не получилось отсканировать и начать прохождение квеста предприятия'
+
 export default function HomePage() {
+	const router = useRouter()
 	const [quests, setQuests] = useState<QuestDto[]>([])
 	const [questCategories, setQuestCategories] = useState<QuestCategory[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
@@ -59,6 +63,7 @@ export default function HomePage() {
 	const [isScannerOpen, setIsScannerOpen] = useState(false)
 	const [manualQrCode, setManualQrCode] = useState('')
 	const [scanNotice, setScanNotice] = useState<string | null>(null)
+	const [isStartingQuest, setIsStartingQuest] = useState(false)
 
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
@@ -149,28 +154,46 @@ export default function HomePage() {
 		[filteredProducts]
 	)
 
-	const handleQrCode = (rawCode: string) => {
+	const handleQrCode = async (rawCode: string) => {
 		const normalizedCode = rawCode.trim().toUpperCase()
-		const found = ENTERPRISE_QR_CODES.find(
-			(item) => item.code === normalizedCode
-		)
 
-		if (found) {
-			setScanNotice(
-				`QR подтвержден: ${found.type === 'museum' ? 'музей' : 'предприятие'} "${found.name}".`
-			)
-			setIsScannerOpen(false)
-			setManualQrCode('')
+		if (!normalizedCode || isStartingQuest) {
 			return
 		}
 
-		setScanNotice('Код не распознан. Проверьте QR и попробуйте еще раз.')
+		setIsStartingQuest(true)
+		setScanNotice(null)
+
+		try {
+			const response = await registerUserQuest(normalizedCode)
+
+			if (!response.quest_id) {
+				throw new Error(QUEST_START_ERROR_MESSAGE)
+			}
+
+			setIsScannerOpen(false)
+			setManualQrCode('')
+			router.push(`/quest/${response.quest_id}`)
+		} catch (error) {
+			const apiError = normalizeApiError(error, QUEST_START_ERROR_MESSAGE)
+			setScanNotice(apiError.message)
+			toast.error(apiError.message)
+		} finally {
+			setIsStartingQuest(false)
+		}
+	}
+
+	const handleScannerOpenChange = (open: boolean) => {
+		setIsScannerOpen(open)
+		if (open) {
+			setScanNotice(null)
+		}
 	}
 
 	return (
 		<div className="mx-auto w-full max-w-7xl space-y-7 px-4 py-7 sm:px-6 lg:px-8">
 			<section className="grid gap-5">
-				<Card className="overflow-hidden border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
+				<Card className="overflow-hidden border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
 					<CardHeader>
 						<Badge className="mb-2 w-fit border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
 							<Sparkles className="mr-1 h-3.5 w-3.5" />
@@ -185,7 +208,7 @@ export default function HomePage() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-wrap gap-3">
-						<Button onClick={() => setIsScannerOpen(true)}>
+						<Button onClick={() => handleScannerOpenChange(true)}>
 							<QrCode className="mr-2 h-4 w-4" />
 							Сканировать QR предприятия
 						</Button>
@@ -308,7 +331,7 @@ export default function HomePage() {
 								return (
 									<div className="relative overflow-hidden rounded-t-xl border-b">
 										<Carousel className="w-full">
-											<CarouselContent className="-ml-0">
+											<CarouselContent className="ml-0">
 												{finalImages.map(
 													(imageUrl, index) => (
 														<CarouselItem
@@ -465,7 +488,7 @@ export default function HomePage() {
 								alt={product.title}
 								className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
 							/>
-							<CardContent className="flex h-[225px] flex-col gap-2 p-4">
+							<CardContent className="flex h-56.25 flex-col gap-2 p-4">
 								<p className="line-clamp-1 font-semibold">
 									{product.title}
 								</p>
@@ -494,7 +517,7 @@ export default function HomePage() {
 				</div>
 			</section>
 
-			<Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+			<Dialog open={isScannerOpen} onOpenChange={handleScannerOpenChange}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>Сканирование QR-кода</DialogTitle>
@@ -504,15 +527,21 @@ export default function HomePage() {
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-3">
-						<div className="mx-auto w-full max-w-[280px] overflow-hidden rounded-lg border">
+						<div className="mx-auto w-full max-w-70 overflow-hidden rounded-lg border">
 							<QrScanner
 								onScanSuccess={handleQrCode}
 								onError={() => {}}
-								disabled={!isScannerOpen}
+								disabled={!isScannerOpen || isStartingQuest}
 								className="aspect-square w-full"
 							/>
 						</div>
-						<div className="space-y-2">
+						<form
+							className="space-y-2"
+							onSubmit={(event) => {
+								event.preventDefault()
+								handleQrCode(manualQrCode)
+							}}
+						>
 							<div className="relative">
 								<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 								<Input
@@ -520,18 +549,29 @@ export default function HomePage() {
 									onChange={(e) =>
 										setManualQrCode(e.target.value)
 									}
-									placeholder="ORG-WOOD-010"
+									placeholder="Q-1B98A8"
 									className="pl-9"
+									disabled={isStartingQuest}
 								/>
 							</div>
 							<Button
+								type="submit"
 								className="w-full"
-								onClick={() => handleQrCode(manualQrCode)}
+								disabled={
+									isStartingQuest || !manualQrCode.trim()
+								}
 							>
 								<MapPin className="mr-2 h-4 w-4" />
-								Проверить код
+								{isStartingQuest
+									? 'Запускаем квест...'
+									: 'Проверить код'}
 							</Button>
-						</div>
+						</form>
+						{scanNotice && (
+							<p className="text-destructive text-sm">
+								{scanNotice}
+							</p>
+						)}
 					</div>
 				</DialogContent>
 			</Dialog>

@@ -24,7 +24,7 @@ export class ApiError extends Error {
 
 type BackendErrorPayload = {
 	message?: string
-	detail?: string
+	detail?: string | Array<{ msg?: string }>
 	error?: string
 	errors?: Record<string, string[] | string>
 	code?: string
@@ -43,6 +43,16 @@ function extractBackendMessage(
 
 	if (typeof payload.detail === 'string' && payload.detail.trim()) {
 		return payload.detail
+	}
+
+	if (Array.isArray(payload.detail)) {
+		const messages = payload.detail
+			.map((item) => item.msg)
+			.filter((message): message is string => Boolean(message?.trim()))
+
+		if (messages.length > 0) {
+			return messages.join(', ')
+		}
 	}
 
 	if (typeof payload.error === 'string' && payload.error.trim()) {
@@ -84,7 +94,7 @@ export function normalizeApiError(
 
 		if (status && status >= 400 && status < 500) {
 			return new ApiError({
-				message: fallbackMessage,
+				message: backendMessage ?? fallbackMessage,
 				status,
 				code: responseData?.code,
 				details: responseData,

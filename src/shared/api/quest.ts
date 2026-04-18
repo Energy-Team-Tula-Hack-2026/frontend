@@ -116,6 +116,27 @@ export async function getQuestById(questId: string): Promise<QuestDto> {
 	}
 }
 
+export type RegisterUserQuestResponse = {
+	quest_id: string
+	message?: string
+}
+
+export async function registerUserQuest(
+	questCode: string
+): Promise<RegisterUserQuestResponse> {
+	try {
+		const response = await api.post(`${API_PREFIX}/users/quest/`, {
+			quest_code: questCode
+		})
+		return response.data
+	} catch (error) {
+		throw normalizeApiError(
+			error,
+			'Не получилось отсканировать и начать прохождение квеста предприятия'
+		)
+	}
+}
+
 export type DailyPointDto = {
 	id: string
 	quest_id: string
