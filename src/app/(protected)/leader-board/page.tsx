@@ -8,7 +8,7 @@ export default function LeaderboardPage() {
 					Рейтинг участников
 				</h1>
 				<p className="text-muted-foreground mt-2 max-w-2xl text-sm sm:text-base">
-					Смотрите, кто активнее всего проходит маршруты и набирает
+					Смотрите, кто активнее всего проходит квесты и набирает
 					баллы.
 				</p>
 			</section>

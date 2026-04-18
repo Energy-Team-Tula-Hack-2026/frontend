@@ -73,10 +73,7 @@ export type QuestDto = {
 	rating?: number | null
 	category?: QuestCategory | null
 	location?: {
-		city_id?: string
-		city_name?: string
-		region_id?: string
-		region_name?: string
+		city?: string | null
 		latitude?: number
 		longitude?: number
 	} | null
@@ -103,6 +100,7 @@ export async function getQuestCategories(): Promise<QuestCategory[]> {
 export async function getQuests(): Promise<QuestDto[]> {
 	try {
 		const response = await api.get(`${API_PREFIX}/quest/`)
+		console.log('Quests response:', response.data)
 		return response.data
 	} catch (error) {
 		throw normalizeApiError(

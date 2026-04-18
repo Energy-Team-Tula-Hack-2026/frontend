@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
 	AddressSuggestions,
@@ -22,10 +22,7 @@ import {
 	ChevronDown,
 	ChevronUp,
 	Trophy,
-	Calendar,
-	Info,
 	AlertCircle,
-	Check,
 	AlertTriangle
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -83,7 +80,6 @@ import { TokenManager } from '@/shared/api/auth'
 import { normalizeApiError } from '@/shared/api/errors'
 import api from '@/shared/api/instance'
 
-// Константы
 const RULE_TYPE_OPTIONS = [
 	{ value: 'QUESTS_COMPLETED', label: 'Количество пройденных квестов' },
 	{ value: 'TOTAL_SCORE', label: 'Общее количество баллов' },
@@ -96,7 +92,6 @@ const RULE_TYPE_OPTIONS = [
 
 const TOKEN_DADATA = '7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d'
 
-// Types
 type MeResponse = {
 	name: string
 	surname: string
@@ -125,8 +120,8 @@ type QuestPoint = {
 	short_description?: string
 	score: number
 	priority: number
-	image_url?: string // меняем string | null на string | undefined
-	audio_record_url?: string // меняем string | null на string | undefined
+	image_url?: string
+	audio_record_url?: string
 	latitude?: number
 	longitude?: number
 	code?: string
@@ -138,11 +133,9 @@ type UiQuest = {
 	description: string
 	category: string
 	categoryId?: string
-	cityId?: string
-	cityName?: string
+	cityName?: string | null
 	latitude?: number
 	longitude?: number
-	price: number
 	distance: number
 	duration: number
 	difficulty: 'easy' | 'medium' | 'hard'
@@ -215,18 +208,16 @@ type CreateAchievementRequest = {
 	rule_params: Record<string, any>
 }
 
-// Начальные значения форм
 const questFormInitial = {
 	title: '',
 	description: '',
 	categoryId: '',
-	cityId: '',
+	city: '',
 	latitude: '',
 	longitude: '',
 	difficulty: 'EASY' as 'EASY' | 'MEDIUM' | 'HARD',
 	duration: '60',
 	distance: '3',
-	price: '400',
 	withGuide: false,
 	guideDescription: '',
 	guideName: '',
@@ -257,7 +248,6 @@ const achievementFormInitial = {
 	rule_params: { threshold: 10, quest_id: '' } as Record<string, any>
 }
 
-// Валидация форм
 interface ValidationErrors {
 	[key: string]: string
 }
@@ -267,7 +257,7 @@ const validateQuestForm = (form: typeof questFormInitial) => {
 	if (!form.title.trim()) errors.title = 'Название обязательно'
 	if (!form.description.trim()) errors.description = 'Описание обязательно'
 	if (!form.categoryId) errors.categoryId = 'Выберите категорию'
-	if (!form.cityId.trim()) errors.cityId = 'City ID обязателен'
+	if (!form.city.trim()) errors.city = 'Город обязателен'
 	if (!form.latitude.trim()) errors.latitude = 'Latitude обязательна'
 	if (!form.longitude.trim()) errors.longitude = 'Longitude обязательна'
 	return errors
@@ -276,8 +266,9 @@ const validateQuestForm = (form: typeof questFormInitial) => {
 const validatePointForm = (form: typeof pointFormInitial) => {
 	const errors: ValidationErrors = {}
 	if (!form.name.trim()) errors.name = 'Название точки обязательно'
-	if (!form.description.trim())
+	if (!form.description.trim()) {
 		errors.description = 'Описание точки обязательно'
+	}
 	return errors
 }
 
@@ -332,8 +323,8 @@ function mapQuestToUi(quest: QuestDto): UiQuest {
 			short_description: point.short_description,
 			score: point.score ?? 0,
 			priority: point.priority ?? 0,
-			image_url: point.image_url || undefined, // null -> undefined
-			audio_record_url: point.audio_record_url || undefined, // null -> undefined
+			image_url: point.image_url || undefined,
+			audio_record_url: point.audio_record_url || undefined,
 			latitude: point.latitude,
 			longitude: point.longitude,
 			code: point.code
@@ -355,11 +346,9 @@ function mapQuestToUi(quest: QuestDto): UiQuest {
 		description: quest.description,
 		category: quest.category?.name ?? 'Без категории',
 		categoryId: quest.category?.id,
-		cityId: quest.location?.city_id,
-		cityName: quest.location?.city_name,
+		cityName: quest.location?.city,
 		latitude: quest.location?.latitude,
 		longitude: quest.location?.longitude,
-		price: quest.price_rub ?? 0,
 		distance: Number(((quest.length_metres ?? 0) / 1000).toFixed(1)),
 		duration: quest.duration_min,
 		difficulty: difficultyMap[quest.level] ?? 'easy',
@@ -374,18 +363,34 @@ function mapQuestToUi(quest: QuestDto): UiQuest {
 	}
 }
 
+function cityToSuggestion(
+	cityName?: string
+): DaDataSuggestion<DaDataAddress> | undefined {
+	if (!cityName) return undefined
+
+	return {
+		value: cityName,
+		unrestricted_value: cityName,
+		data: {
+			city: cityName
+		} as DaDataAddress
+	}
+}
+
 export default function AdminPage() {
 	const router = useRouter()
 	const [isLoading, setIsLoading] = useState(true)
 	const [isAuthorized, setIsAuthorized] = useState(false)
 	const [activeTab, setActiveTab] = useState('quests')
 
-	// Quest states
 	const [quests, setQuests] = useState<UiQuest[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
 	const [categories, setCategories] = useState<QuestCategory[]>([])
-	const [cityDefaultQuery, setCityDefaultQuery] = useState('')
 	const dadataUid = useId()
+	const [citySuggestion, setCitySuggestion] = useState<
+		DaDataSuggestion<DaDataAddress> | undefined
+	>(undefined)
+
 	const [isCreateQuestDialogOpen, setIsCreateQuestDialogOpen] =
 		useState(false)
 	const [isEditQuestDialogOpen, setIsEditQuestDialogOpen] = useState(false)
@@ -396,7 +401,6 @@ export default function AdminPage() {
 	const [isPointsDialogOpen, setIsPointsDialogOpen] = useState(false)
 	const [expandedPoints, setExpandedPoints] = useState<string[]>([])
 
-	// Achievement states
 	const [achievements, setAchievements] = useState<Achievement[]>([])
 	const [isLoadingAchievements, setIsLoadingAchievements] = useState(true)
 	const [isCreateAchievementDialogOpen, setIsCreateAchievementDialogOpen] =
@@ -411,7 +415,6 @@ export default function AdminPage() {
 	const [deletePointDialogOpen, setDeletePointDialogOpen] = useState(false)
 	const [pointToDelete, setPointToDelete] = useState<QuestPoint | null>(null)
 
-	// Quest form state
 	const [questForm, setQuestForm] = useState({ ...questFormInitial })
 	const [questFormErrors, setQuestFormErrors] = useState<ValidationErrors>({})
 	const [questImageFiles, setQuestImageFiles] = useState<File[]>([])
@@ -420,7 +423,6 @@ export default function AdminPage() {
 	const [isGeneratingQuestDescription, setIsGeneratingQuestDescription] =
 		useState(false)
 
-	// Point form state
 	const [pointForm, setPointForm] = useState({ ...pointFormInitial })
 	const [pointFormErrors, setPointFormErrors] = useState<ValidationErrors>({})
 	const [pointImageFile, setPointImageFile] = useState<File | null>(null)
@@ -433,7 +435,6 @@ export default function AdminPage() {
 	const [isSubmittingPoint, setIsSubmittingPoint] = useState(false)
 	const [isEditPointDialogOpen, setIsEditPointDialogOpen] = useState(false)
 
-	// Achievement form state
 	const [achievementForm, setAchievementForm] = useState({
 		...achievementFormInitial
 	})
@@ -443,7 +444,6 @@ export default function AdminPage() {
 		useState<File | null>(null)
 	const [achievementImagePreview, setAchievementImagePreview] = useState('')
 
-	// Check admin access
 	useEffect(() => {
 		const checkAdminAccess = async () => {
 			const isAuthenticated = TokenManager.isAuthenticated()
@@ -485,7 +485,6 @@ export default function AdminPage() {
 		checkAdminAccess()
 	}, [router])
 
-	// Load data
 	const loadQuests = async () => {
 		setIsLoadingQuests(true)
 		try {
@@ -531,7 +530,6 @@ export default function AdminPage() {
 		}
 	}
 
-	// File upload
 	const uploadFile = async (
 		file: File,
 		type: 'photo' | 'audio'
@@ -554,7 +552,6 @@ export default function AdminPage() {
 		}
 	}
 
-	// AI Description Generation for Quest
 	const generateQuestDescriptionWithAI = async (
 		currentDescription: string
 	) => {
@@ -569,9 +566,12 @@ export default function AdminPage() {
 				description: currentDescription
 			})
 			const improvedDescription = response.data.description
-			setQuestForm({ ...questForm, description: improvedDescription })
+			setQuestForm((prev) => ({
+				...prev,
+				description: improvedDescription
+			}))
 			if (questFormErrors.description) {
-				setQuestFormErrors({ ...questFormErrors, description: '' })
+				setQuestFormErrors((prev) => ({ ...prev, description: '' }))
 			}
 			toast.success('Описание улучшено с помощью AI!')
 		} catch (error) {
@@ -585,7 +585,6 @@ export default function AdminPage() {
 		}
 	}
 
-	// AI Description Generation for Point
 	const generatePointDescriptionWithAI = async (
 		currentDescription: string
 	) => {
@@ -600,9 +599,12 @@ export default function AdminPage() {
 				description: currentDescription
 			})
 			const improvedDescription = response.data.description
-			setPointForm({ ...pointForm, description: improvedDescription })
+			setPointForm((prev) => ({
+				...prev,
+				description: improvedDescription
+			}))
 			if (pointFormErrors.description) {
-				setPointFormErrors({ ...pointFormErrors, description: '' })
+				setPointFormErrors((prev) => ({ ...prev, description: '' }))
 			}
 			toast.success('Описание улучшено с помощью AI!')
 		} catch (error) {
@@ -616,7 +618,6 @@ export default function AdminPage() {
 		}
 	}
 
-	// Quest CRUD
 	const handleCreateQuest = async () => {
 		const errors = validateQuestForm(questForm)
 		if (Object.keys(errors).length > 0) {
@@ -633,7 +634,7 @@ export default function AdminPage() {
 				category_id: questForm.categoryId,
 				latitude: Number(questForm.latitude || 0),
 				longitude: Number(questForm.longitude || 0),
-				city: questForm.cityId,
+				city: questForm.city,
 				duration_min: Number(questForm.duration),
 				level: questForm.difficulty
 			}
@@ -649,6 +650,7 @@ export default function AdminPage() {
 					})
 				}
 			}
+
 			toast.success('Маршрут успешно создан!')
 			setIsCreateQuestDialogOpen(false)
 			resetQuestForm()
@@ -666,13 +668,15 @@ export default function AdminPage() {
 
 	const handleEditQuest = (quest: UiQuest) => {
 		setEditingQuest(quest)
-		setCityDefaultQuery(quest.cityName || '')
+		console.log('Editing quest:', quest)
+
+		const cityValue = quest.cityName || ''
 
 		setQuestForm({
 			title: quest.title,
 			description: quest.description,
 			categoryId: quest.categoryId || '',
-			cityId: quest.cityId || '',
+			city: cityValue,
 			latitude: quest.latitude != null ? String(quest.latitude) : '',
 			longitude: quest.longitude != null ? String(quest.longitude) : '',
 			difficulty:
@@ -683,7 +687,6 @@ export default function AdminPage() {
 						: 'HARD',
 			duration: quest.duration.toString(),
 			distance: '0',
-			price: '0',
 			withGuide: false,
 			guideDescription: '',
 			guideName: '',
@@ -691,6 +694,8 @@ export default function AdminPage() {
 			plannedStart: '',
 			capacity: '10'
 		})
+
+		setCitySuggestion(cityToSuggestion(cityValue))
 		setQuestFormErrors({})
 		setExistingImages(quest.images)
 		setImagesToDelete([])
@@ -735,7 +740,7 @@ export default function AdminPage() {
 				category_id: questForm.categoryId,
 				latitude: Number(questForm.latitude || 0),
 				longitude: Number(questForm.longitude || 0),
-				city: questForm.cityId,
+				city: questForm.city,
 				duration_min: Number(questForm.duration),
 				level: questForm.difficulty
 			}
@@ -761,8 +766,9 @@ export default function AdminPage() {
 			!confirm(
 				'Вы уверены, что хотите удалить этот маршрут? Это действие нельзя отменить.'
 			)
-		)
+		) {
 			return
+		}
 
 		try {
 			await api.delete(`/api/v2/quest/${id}`)
@@ -777,7 +783,6 @@ export default function AdminPage() {
 		}
 	}
 
-	// Point CRUD
 	const handleCreatePoint = async () => {
 		if (!selectedQuest) return
 
@@ -825,6 +830,7 @@ export default function AdminPage() {
 					audio_record_url: audioUrl
 				})
 			}
+
 			toast.success('Точка маршрута успешно добавлена!')
 			resetPointForm()
 			await loadQuests()
@@ -854,8 +860,8 @@ export default function AdminPage() {
 		setPointFormErrors({})
 		setPointImageFile(null)
 		setPointAudioFile(null)
-		setPointImagePreview(point.image_url || '') // используем image_url
-		setPointAudioPreview(point.audio_record_url || '') // используем audio_record_url
+		setPointImagePreview(point.image_url || '')
+		setPointAudioPreview(point.audio_record_url || '')
 		setIsEditPointDialogOpen(true)
 	}
 
@@ -871,21 +877,15 @@ export default function AdminPage() {
 
 		setIsSubmittingPoint(true)
 		try {
-			// Загружаем новые файлы если есть
-			let newImageUrl = editingPoint.image_url
-			let newAudioUrl = editingPoint.audio_record_url
-
 			if (pointImageFile) {
-				newImageUrl = await uploadFile(pointImageFile, 'photo')
-				// Обновляем изображение
+				const newImageUrl = await uploadFile(pointImageFile, 'photo')
 				await api.put(`/api/v2/quest/point/${editingPoint.id}/image`, {
 					image_url: newImageUrl
 				})
 			}
 
 			if (pointAudioFile) {
-				newAudioUrl = await uploadFile(pointAudioFile, 'audio')
-				// Обновляем аудио
+				const newAudioUrl = await uploadFile(pointAudioFile, 'audio')
 				await api.put(`/api/v2/quest/point/${editingPoint.id}/audio`, {
 					audio_record_url: newAudioUrl
 				})
@@ -990,7 +990,6 @@ export default function AdminPage() {
 		setDeletePointDialogOpen(true)
 	}
 
-	// Achievement CRUD
 	const handleCreateAchievement = async () => {
 		const errors = validateAchievementForm(achievementForm)
 		if (Object.keys(errors).length > 0) {
@@ -1067,8 +1066,9 @@ export default function AdminPage() {
 			rule_params: achievement.rule_params
 		})
 		setAchievementFormErrors({})
-		if (achievement.image_url)
+		if (achievement.image_url) {
 			setAchievementImagePreview(achievement.image_url)
+		}
 		setIsCreateAchievementDialogOpen(true)
 	}
 
@@ -1077,7 +1077,6 @@ export default function AdminPage() {
 		setDeleteAchievementDialogOpen(true)
 	}
 
-	// Reset functions
 	const resetQuestForm = () => {
 		setQuestForm({ ...questFormInitial })
 		setQuestFormErrors({})
@@ -1085,7 +1084,7 @@ export default function AdminPage() {
 		setExistingImages([])
 		setImagesToDelete([])
 		setEditingQuest(null)
-		setCityDefaultQuery('')
+		setCitySuggestion(undefined)
 	}
 
 	const resetPointForm = () => {
@@ -1114,7 +1113,6 @@ export default function AdminPage() {
 		)
 	}
 
-	// Синхронизация selectedQuest с актуальными данными
 	useEffect(() => {
 		if (selectedQuest && isPointsDialogOpen) {
 			const updatedQuest = quests.find((q) => q.id === selectedQuest.id)
@@ -1128,7 +1126,6 @@ export default function AdminPage() {
 		}
 	}, [quests, selectedQuest, isPointsDialogOpen])
 
-	// Функция для рендера поля с ошибкой
 	const renderField = (
 		label: string,
 		field: string,
@@ -1155,17 +1152,24 @@ export default function AdminPage() {
 	const handleCitySuggestionChange = (
 		suggestion?: DaDataSuggestion<DaDataAddress>
 	) => {
-		const suggestedCityName =
-			suggestion?.data?.city || suggestion?.value || ''
-		setCityDefaultQuery(suggestedCityName)
+		setCitySuggestion(suggestion)
+
+		const city =
+			suggestion?.data?.city ||
+			suggestion?.data?.settlement ||
+			suggestion?.value ||
+			''
+
 		setQuestForm((prev) => ({
 			...prev,
-			cityId: suggestedCityName
+			city
 		}))
-		if (suggestedCityName && questFormErrors.cityId) {
-			setQuestFormErrors((prev) => ({ ...prev, cityId: '' }))
+
+		if (city && questFormErrors.city) {
+			setQuestFormErrors((prev) => ({ ...prev, city: '' }))
 		}
 	}
+
 	const stats = {
 		totalQuests: quests.length,
 		totalPoints: quests.reduce((sum, q) => sum + q.checkpointsCount, 0),
@@ -1192,9 +1196,10 @@ export default function AdminPage() {
 
 	if (!isAuthorized) return null
 
+	console.log('Form', questForm)
+
 	return (
 		<div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-			{/* Header */}
 			<div className="mb-8 flex items-center justify-between">
 				<div>
 					<div className="mb-2 flex items-center space-x-3">
@@ -1213,14 +1218,13 @@ export default function AdminPage() {
 				</div>
 			</div>
 
-			{/* Stats Cards */}
 			<div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
 				<Card>
 					<CardContent className="pt-6">
 						<div className="flex items-center justify-between">
 							<div>
 								<p className="text-muted-foreground mb-1 text-sm">
-									Всего маршрутов
+									Всего квестов
 								</p>
 								<p className="text-foreground text-2xl font-bold">
 									{stats.totalQuests}
@@ -1232,6 +1236,7 @@ export default function AdminPage() {
 						</div>
 					</CardContent>
 				</Card>
+
 				<Card>
 					<CardContent className="pt-6">
 						<div className="flex items-center justify-between">
@@ -1249,6 +1254,7 @@ export default function AdminPage() {
 						</div>
 					</CardContent>
 				</Card>
+
 				<Card>
 					<CardContent className="pt-6">
 						<div className="flex items-center justify-between">
@@ -1266,6 +1272,7 @@ export default function AdminPage() {
 						</div>
 					</CardContent>
 				</Card>
+
 				<Card>
 					<CardContent className="pt-6">
 						<div className="flex items-center justify-between">
@@ -1285,7 +1292,6 @@ export default function AdminPage() {
 				</Card>
 			</div>
 
-			{/* Main Tabs */}
 			<Tabs
 				value={activeTab}
 				onValueChange={setActiveTab}
@@ -1302,12 +1308,12 @@ export default function AdminPage() {
 					</TabsTrigger>
 				</TabsList>
 
-				{/* Quests Tab */}
 				<TabsContent value="quests" className="space-y-6">
 					<div className="flex items-center justify-between">
 						<h2 className="text-foreground text-xl font-semibold">
-							Управление маршрутами
+							Управление квестами
 						</h2>
+
 						<Dialog
 							open={isCreateQuestDialogOpen}
 							onOpenChange={(open) => {
@@ -1318,18 +1324,20 @@ export default function AdminPage() {
 							<DialogTrigger asChild>
 								<Button className="bg-gradient-to-r from-blue-500 to-purple-600">
 									<Plus className="mr-2 h-4 w-4" />
-									Создать маршрут
+									Создать квест
 								</Button>
 							</DialogTrigger>
+
 							<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
 								<DialogHeader>
 									<DialogTitle>
-										Создание нового маршрута
+										Создание нового квеста
 									</DialogTitle>
 									<DialogDescription>
-										Заполните информацию о маршруте
+										Заполните информацию о квесте
 									</DialogDescription>
 								</DialogHeader>
+
 								<div className="grid gap-4 py-4">
 									{renderField(
 										'Название *',
@@ -1337,15 +1345,18 @@ export default function AdminPage() {
 										<Input
 											value={questForm.title}
 											onChange={(e) => {
-												setQuestForm({
-													...questForm,
+												setQuestForm((prev) => ({
+													...prev,
 													title: e.target.value
-												})
-												if (questFormErrors.title)
-													setQuestFormErrors({
-														...questFormErrors,
-														title: ''
-													})
+												}))
+												if (questFormErrors.title) {
+													setQuestFormErrors(
+														(prev) => ({
+															...prev,
+															title: ''
+														})
+													)
+												}
 											}}
 										/>,
 										questFormErrors.title
@@ -1372,21 +1383,28 @@ export default function AdminPage() {
 													: 'Улучшить AI'}
 											</Button>
 										</div>
+
 										<Textarea
 											rows={3}
 											value={questForm.description}
 											onChange={(e) => {
-												setQuestForm({
-													...questForm,
+												setQuestForm((prev) => ({
+													...prev,
 													description: e.target.value
-												})
-												if (questFormErrors.description)
-													setQuestFormErrors({
-														...questFormErrors,
-														description: ''
-													})
+												}))
+												if (
+													questFormErrors.description
+												) {
+													setQuestFormErrors(
+														(prev) => ({
+															...prev,
+															description: ''
+														})
+													)
+												}
 											}}
 										/>
+
 										{questFormErrors.description && (
 											<div className="flex items-center gap-1 text-sm text-red-500">
 												<AlertCircle className="h-4 w-4" />
@@ -1405,17 +1423,20 @@ export default function AdminPage() {
 											<Select
 												value={questForm.categoryId}
 												onValueChange={(v) => {
-													setQuestForm({
-														...questForm,
+													setQuestForm((prev) => ({
+														...prev,
 														categoryId: v
-													})
+													}))
 													if (
 														questFormErrors.categoryId
-													)
-														setQuestFormErrors({
-															...questFormErrors,
-															categoryId: ''
-														})
+													) {
+														setQuestFormErrors(
+															(prev) => ({
+																...prev,
+																categoryId: ''
+															})
+														)
+													}
 												}}
 											>
 												<SelectTrigger
@@ -1438,6 +1459,7 @@ export default function AdminPage() {
 													))}
 												</SelectContent>
 											</Select>
+
 											{questFormErrors.categoryId && (
 												<div className="flex items-center gap-1 text-sm text-red-500">
 													<AlertCircle className="h-4 w-4" />
@@ -1449,15 +1471,21 @@ export default function AdminPage() {
 												</div>
 											)}
 										</div>
+
 										<div className="grid gap-2">
 											<Label>Сложность</Label>
 											<Select
 												value={questForm.difficulty}
-												onValueChange={(v: any) =>
-													setQuestForm({
-														...questForm,
+												onValueChange={(
+													v:
+														| 'EASY'
+														| 'MEDIUM'
+														| 'HARD'
+												) =>
+													setQuestForm((prev) => ({
+														...prev,
 														difficulty: v
-													})
+													}))
 												}
 											>
 												<SelectTrigger>
@@ -1485,20 +1513,20 @@ export default function AdminPage() {
 												type="number"
 												value={questForm.duration}
 												onChange={(e) =>
-													setQuestForm({
-														...questForm,
+													setQuestForm((prev) => ({
+														...prev,
 														duration: e.target.value
-													})
+													}))
 												}
 											/>
 										</div>
+
 										<div className="grid gap-2">
-											<Label>Город</Label>
+											<Label>Город *</Label>
 											<AddressSuggestions
-												key={`create-${cityDefaultQuery}`}
 												uid={`${dadataUid}-create`}
 												token={TOKEN_DADATA}
-												defaultQuery={cityDefaultQuery}
+												value={citySuggestion}
 												onChange={
 													handleCitySuggestionChange
 												}
@@ -1519,6 +1547,14 @@ export default function AdminPage() {
 														'Начните вводить город'
 												}}
 											/>
+											{questFormErrors.city && (
+												<div className="flex items-center gap-1 text-sm text-red-500">
+													<AlertCircle className="h-4 w-4" />
+													<span>
+														{questFormErrors.city}
+													</span>
+												</div>
+											)}
 										</div>
 									</div>
 
@@ -1529,27 +1565,48 @@ export default function AdminPage() {
 												type="number"
 												step="any"
 												value={questForm.latitude}
-												onChange={(e) =>
-													setQuestForm({
-														...questForm,
+												onChange={(e) => {
+													setQuestForm((prev) => ({
+														...prev,
 														latitude: e.target.value
-													})
-												}
+													}))
+													if (
+														questFormErrors.latitude
+													) {
+														setQuestFormErrors(
+															(prev) => ({
+																...prev,
+																latitude: ''
+															})
+														)
+													}
+												}}
 											/>
 										</div>
+
 										<div className="grid gap-2">
 											<Label>Longitude</Label>
 											<Input
 												type="number"
 												step="any"
 												value={questForm.longitude}
-												onChange={(e) =>
-													setQuestForm({
-														...questForm,
+												onChange={(e) => {
+													setQuestForm((prev) => ({
+														...prev,
 														longitude:
 															e.target.value
-													})
-												}
+													}))
+													if (
+														questFormErrors.longitude
+													) {
+														setQuestFormErrors(
+															(prev) => ({
+																...prev,
+																longitude: ''
+															})
+														)
+													}
+												}}
 											/>
 										</div>
 									</div>
@@ -1564,12 +1621,13 @@ export default function AdminPage() {
 												const files = Array.from(
 													e.target.files || []
 												)
-												setQuestImageFiles([
-													...questImageFiles,
+												setQuestImageFiles((prev) => [
+													...prev,
 													...files
 												])
 											}}
 										/>
+
 										{questImageFiles.length > 0 && (
 											<div className="mt-2 grid grid-cols-3 gap-2">
 												{questImageFiles.map((f, i) => (
@@ -1582,18 +1640,21 @@ export default function AdminPage() {
 																f
 															)}
 															className="h-24 w-full rounded object-cover"
+															alt=""
 														/>
 														<button
+															type="button"
 															onClick={() =>
 																setQuestImageFiles(
-																	questImageFiles.filter(
-																		(
-																			_,
-																			idx
-																		) =>
-																			idx !==
-																			i
-																	)
+																	(prev) =>
+																		prev.filter(
+																			(
+																				_,
+																				idx
+																			) =>
+																				idx !==
+																				i
+																		)
 																)
 															}
 															className="absolute top-1 right-1 rounded-full bg-red-500 p-1"
@@ -1618,19 +1679,25 @@ export default function AdminPage() {
 														questForm.guideDescription
 													}
 													onChange={(e) => {
-														setQuestForm({
-															...questForm,
-															guideDescription:
-																e.target.value
-														})
+														setQuestForm(
+															(prev) => ({
+																...prev,
+																guideDescription:
+																	e.target
+																		.value
+															})
+														)
 														if (
 															questFormErrors.guideDescription
-														)
-															setQuestFormErrors({
-																...questFormErrors,
-																guideDescription:
-																	''
-															})
+														) {
+															setQuestFormErrors(
+																(prev) => ({
+																	...prev,
+																	guideDescription:
+																		''
+																})
+															)
+														}
 													}}
 												/>,
 												questFormErrors.guideDescription
@@ -1646,22 +1713,25 @@ export default function AdminPage() {
 															questForm.guideName
 														}
 														onChange={(e) => {
-															setQuestForm({
-																...questForm,
-																guideName:
-																	e.target
-																		.value
-															})
+															setQuestForm(
+																(prev) => ({
+																	...prev,
+																	guideName:
+																		e.target
+																			.value
+																})
+															)
 															if (
 																questFormErrors.guideName
-															)
+															) {
 																setQuestFormErrors(
-																	{
-																		...questFormErrors,
+																	(prev) => ({
+																		...prev,
 																		guideName:
 																			''
-																	}
+																	})
 																)
+															}
 														}}
 													/>,
 													questFormErrors.guideName
@@ -1678,12 +1748,14 @@ export default function AdminPage() {
 															questForm.capacity
 														}
 														onChange={(e) =>
-															setQuestForm({
-																...questForm,
-																capacity:
-																	e.target
-																		.value
-															})
+															setQuestForm(
+																(prev) => ({
+																	...prev,
+																	capacity:
+																		e.target
+																			.value
+																})
+															)
 														}
 													/>
 												</div>
@@ -1696,18 +1768,25 @@ export default function AdminPage() {
 													placeholder="https://t.me/..."
 													value={questForm.groupLink}
 													onChange={(e) => {
-														setQuestForm({
-															...questForm,
-															groupLink:
-																e.target.value
-														})
+														setQuestForm(
+															(prev) => ({
+																...prev,
+																groupLink:
+																	e.target
+																		.value
+															})
+														)
 														if (
 															questFormErrors.groupLink
-														)
-															setQuestFormErrors({
-																...questFormErrors,
-																groupLink: ''
-															})
+														) {
+															setQuestFormErrors(
+																(prev) => ({
+																	...prev,
+																	groupLink:
+																		''
+																})
+															)
+														}
 													}}
 												/>,
 												questFormErrors.groupLink
@@ -1722,23 +1801,31 @@ export default function AdminPage() {
 														questForm.plannedStart
 													}
 													onChange={(e) => {
-														setQuestForm({
-															...questForm,
-															plannedStart:
-																e.target.value
-														})
+														setQuestForm(
+															(prev) => ({
+																...prev,
+																plannedStart:
+																	e.target
+																		.value
+															})
+														)
 														if (
 															questFormErrors.plannedStart
-														)
-															setQuestFormErrors({
-																...questFormErrors,
-																plannedStart: ''
-															})
+														) {
+															setQuestFormErrors(
+																(prev) => ({
+																	...prev,
+																	plannedStart:
+																		''
+																})
+															)
+														}
 													}}
 													className="w-full"
 												/>,
 												questFormErrors.plannedStart
 											)}
+
 											<p className="text-muted-foreground -mt-2 text-xs">
 												Формат: ГГГГ-ММ-ДДTЧЧ:ММ
 												(например: 2024-12-31T15:30)
@@ -1746,6 +1833,7 @@ export default function AdminPage() {
 										</div>
 									)}
 								</div>
+
 								<DialogFooter>
 									<Button
 										variant="outline"
@@ -1771,7 +1859,6 @@ export default function AdminPage() {
 						</Dialog>
 					</div>
 
-					{/* Dialog для редактирования квеста */}
 					<Dialog
 						open={isEditQuestDialogOpen}
 						onOpenChange={(open) => {
@@ -1781,13 +1868,12 @@ export default function AdminPage() {
 					>
 						<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
 							<DialogHeader>
-								<DialogTitle>
-									Редактирование маршрута
-								</DialogTitle>
+								<DialogTitle>Редактирование квеста</DialogTitle>
 								<DialogDescription>
-									Измените информацию о маршруте
+									Измените информацию о квесте
 								</DialogDescription>
 							</DialogHeader>
+
 							<div className="grid gap-4 py-4">
 								{renderField(
 									'Название *',
@@ -1795,15 +1881,16 @@ export default function AdminPage() {
 									<Input
 										value={questForm.title}
 										onChange={(e) => {
-											setQuestForm({
-												...questForm,
+											setQuestForm((prev) => ({
+												...prev,
 												title: e.target.value
-											})
-											if (questFormErrors.title)
-												setQuestFormErrors({
-													...questFormErrors,
+											}))
+											if (questFormErrors.title) {
+												setQuestFormErrors((prev) => ({
+													...prev,
 													title: ''
-												})
+												}))
+											}
 										}}
 									/>,
 									questFormErrors.title
@@ -1830,21 +1917,24 @@ export default function AdminPage() {
 												: 'Улучшить AI'}
 										</Button>
 									</div>
+
 									<Textarea
 										rows={3}
 										value={questForm.description}
 										onChange={(e) => {
-											setQuestForm({
-												...questForm,
+											setQuestForm((prev) => ({
+												...prev,
 												description: e.target.value
-											})
-											if (questFormErrors.description)
-												setQuestFormErrors({
-													...questFormErrors,
+											}))
+											if (questFormErrors.description) {
+												setQuestFormErrors((prev) => ({
+													...prev,
 													description: ''
-												})
+												}))
+											}
 										}}
 									/>
+
 									{questFormErrors.description && (
 										<div className="flex items-center gap-1 text-sm text-red-500">
 											<AlertCircle className="h-4 w-4" />
@@ -1861,15 +1951,20 @@ export default function AdminPage() {
 										<Select
 											value={questForm.categoryId}
 											onValueChange={(v) => {
-												setQuestForm({
-													...questForm,
+												setQuestForm((prev) => ({
+													...prev,
 													categoryId: v
-												})
-												if (questFormErrors.categoryId)
-													setQuestFormErrors({
-														...questFormErrors,
-														categoryId: ''
-													})
+												}))
+												if (
+													questFormErrors.categoryId
+												) {
+													setQuestFormErrors(
+														(prev) => ({
+															...prev,
+															categoryId: ''
+														})
+													)
+												}
 											}}
 										>
 											<SelectTrigger
@@ -1892,6 +1987,7 @@ export default function AdminPage() {
 												))}
 											</SelectContent>
 										</Select>
+
 										{questFormErrors.categoryId && (
 											<div className="flex items-center gap-1 text-sm text-red-500">
 												<AlertCircle className="h-4 w-4" />
@@ -1901,15 +1997,18 @@ export default function AdminPage() {
 											</div>
 										)}
 									</div>
+
 									<div className="grid gap-2">
 										<Label>Сложность</Label>
 										<Select
 											value={questForm.difficulty}
-											onValueChange={(v: any) =>
-												setQuestForm({
-													...questForm,
+											onValueChange={(
+												v: 'EASY' | 'MEDIUM' | 'HARD'
+											) =>
+												setQuestForm((prev) => ({
+													...prev,
 													difficulty: v
-												})
+												}))
 											}
 										>
 											<SelectTrigger>
@@ -1937,20 +2036,20 @@ export default function AdminPage() {
 											type="number"
 											value={questForm.duration}
 											onChange={(e) =>
-												setQuestForm({
-													...questForm,
+												setQuestForm((prev) => ({
+													...prev,
 													duration: e.target.value
-												})
+												}))
 											}
 										/>
 									</div>
+
 									<div className="grid gap-2">
-										<Label>Город</Label>
+										<Label>Город *</Label>
 										<AddressSuggestions
-											key={`edit-${cityDefaultQuery}`}
 											uid={`${dadataUid}-edit`}
 											token={TOKEN_DADATA}
-											defaultQuery={cityDefaultQuery}
+											value={citySuggestion}
 											onChange={
 												handleCitySuggestionChange
 											}
@@ -1959,6 +2058,7 @@ export default function AdminPage() {
 											filterRestrictValue
 											minChars={1}
 											selectOnBlur
+											defaultQuery={questForm.city}
 											containerClassName="dadata-city-container"
 											suggestionsClassName="dadata-city-suggestions"
 											suggestionClassName="dadata-city-suggestion"
@@ -1971,6 +2071,15 @@ export default function AdminPage() {
 													'Начните вводить город'
 											}}
 										/>
+
+										{questFormErrors.city && (
+											<div className="flex items-center gap-1 text-sm text-red-500">
+												<AlertCircle className="h-4 w-4" />
+												<span>
+													{questFormErrors.city}
+												</span>
+											</div>
+										)}
 									</div>
 								</div>
 
@@ -1981,26 +2090,43 @@ export default function AdminPage() {
 											type="number"
 											step="any"
 											value={questForm.latitude}
-											onChange={(e) =>
-												setQuestForm({
-													...questForm,
+											onChange={(e) => {
+												setQuestForm((prev) => ({
+													...prev,
 													latitude: e.target.value
-												})
-											}
+												}))
+												if (questFormErrors.latitude) {
+													setQuestFormErrors(
+														(prev) => ({
+															...prev,
+															latitude: ''
+														})
+													)
+												}
+											}}
 										/>
 									</div>
+
 									<div className="grid gap-2">
 										<Label>Longitude</Label>
 										<Input
 											type="number"
 											step="any"
 											value={questForm.longitude}
-											onChange={(e) =>
-												setQuestForm({
-													...questForm,
+											onChange={(e) => {
+												setQuestForm((prev) => ({
+													...prev,
 													longitude: e.target.value
-												})
-											}
+												}))
+												if (questFormErrors.longitude) {
+													setQuestFormErrors(
+														(prev) => ({
+															...prev,
+															longitude: ''
+														})
+													)
+												}
+											}}
 										/>
 									</div>
 								</div>
@@ -2017,15 +2143,18 @@ export default function AdminPage() {
 													<img
 														src={img}
 														className="h-24 w-full rounded object-cover"
+														alt=""
 													/>
+
 													{!imagesToDelete.includes(
 														img
 													) && (
 														<button
+															type="button"
 															onClick={() =>
 																setImagesToDelete(
-																	[
-																		...imagesToDelete,
+																	(prev) => [
+																		...prev,
 																		img
 																	]
 																)
@@ -2035,6 +2164,7 @@ export default function AdminPage() {
 															<X className="h-3 w-3 text-white" />
 														</button>
 													)}
+
 													{imagesToDelete.includes(
 														img
 													) && (
@@ -2060,12 +2190,13 @@ export default function AdminPage() {
 											const files = Array.from(
 												e.target.files || []
 											)
-											setQuestImageFiles([
-												...questImageFiles,
+											setQuestImageFiles((prev) => [
+												...prev,
 												...files
 											])
 										}}
 									/>
+
 									{questImageFiles.length > 0 && (
 										<div className="mt-2 grid grid-cols-3 gap-2">
 											{questImageFiles.map((f, i) => (
@@ -2078,15 +2209,21 @@ export default function AdminPage() {
 															f
 														)}
 														className="h-24 w-full rounded object-cover"
+														alt=""
 													/>
 													<button
+														type="button"
 														onClick={() =>
 															setQuestImageFiles(
-																questImageFiles.filter(
-																	(_, idx) =>
-																		idx !==
-																		i
-																)
+																(prev) =>
+																	prev.filter(
+																		(
+																			_,
+																			idx
+																		) =>
+																			idx !==
+																			i
+																	)
 															)
 														}
 														className="absolute top-1 right-1 rounded-full bg-red-500 p-1"
@@ -2111,18 +2248,22 @@ export default function AdminPage() {
 													questForm.guideDescription
 												}
 												onChange={(e) => {
-													setQuestForm({
-														...questForm,
+													setQuestForm((prev) => ({
+														...prev,
 														guideDescription:
 															e.target.value
-													})
+													}))
 													if (
 														questFormErrors.guideDescription
-													)
-														setQuestFormErrors({
-															...questFormErrors,
-															guideDescription: ''
-														})
+													) {
+														setQuestFormErrors(
+															(prev) => ({
+																...prev,
+																guideDescription:
+																	''
+															})
+														)
+													}
 												}}
 											/>,
 											questFormErrors.guideDescription
@@ -2136,18 +2277,25 @@ export default function AdminPage() {
 													placeholder="Имя и фамилия гида"
 													value={questForm.guideName}
 													onChange={(e) => {
-														setQuestForm({
-															...questForm,
-															guideName:
-																e.target.value
-														})
+														setQuestForm(
+															(prev) => ({
+																...prev,
+																guideName:
+																	e.target
+																		.value
+															})
+														)
 														if (
 															questFormErrors.guideName
-														)
-															setQuestFormErrors({
-																...questFormErrors,
-																guideName: ''
-															})
+														) {
+															setQuestFormErrors(
+																(prev) => ({
+																	...prev,
+																	guideName:
+																		''
+																})
+															)
+														}
 													}}
 												/>,
 												questFormErrors.guideName
@@ -2162,11 +2310,14 @@ export default function AdminPage() {
 													placeholder="Максимум участников"
 													value={questForm.capacity}
 													onChange={(e) =>
-														setQuestForm({
-															...questForm,
-															capacity:
-																e.target.value
-														})
+														setQuestForm(
+															(prev) => ({
+																...prev,
+																capacity:
+																	e.target
+																		.value
+															})
+														)
 													}
 												/>
 											</div>
@@ -2179,18 +2330,21 @@ export default function AdminPage() {
 												placeholder="https://t.me/..."
 												value={questForm.groupLink}
 												onChange={(e) => {
-													setQuestForm({
-														...questForm,
+													setQuestForm((prev) => ({
+														...prev,
 														groupLink:
 															e.target.value
-													})
+													}))
 													if (
 														questFormErrors.groupLink
-													)
-														setQuestFormErrors({
-															...questFormErrors,
-															groupLink: ''
-														})
+													) {
+														setQuestFormErrors(
+															(prev) => ({
+																...prev,
+																groupLink: ''
+															})
+														)
+													}
 												}}
 											/>,
 											questFormErrors.groupLink
@@ -2203,23 +2357,27 @@ export default function AdminPage() {
 												type="datetime-local"
 												value={questForm.plannedStart}
 												onChange={(e) => {
-													setQuestForm({
-														...questForm,
+													setQuestForm((prev) => ({
+														...prev,
 														plannedStart:
 															e.target.value
-													})
+													}))
 													if (
 														questFormErrors.plannedStart
-													)
-														setQuestFormErrors({
-															...questFormErrors,
-															plannedStart: ''
-														})
+													) {
+														setQuestFormErrors(
+															(prev) => ({
+																...prev,
+																plannedStart: ''
+															})
+														)
+													}
 												}}
 												className="w-full"
 											/>,
 											questFormErrors.plannedStart
 										)}
+
 										<p className="text-muted-foreground -mt-2 text-xs">
 											Формат: ГГГГ-ММ-ДДTЧЧ:ММ (например:
 											2024-12-31T15:30)
@@ -2227,6 +2385,7 @@ export default function AdminPage() {
 									</div>
 								)}
 							</div>
+
 							<DialogFooter>
 								<Button
 									variant="outline"
@@ -2251,7 +2410,6 @@ export default function AdminPage() {
 						</DialogContent>
 					</Dialog>
 
-					{/* Таблица квестов */}
 					<Card>
 						<CardContent className="overflow-x-auto p-0">
 							{isLoadingQuests ? (
@@ -2273,25 +2431,30 @@ export default function AdminPage() {
 												<TableHead>Категория</TableHead>
 												<TableHead>Сложность</TableHead>
 												<TableHead>Точек</TableHead>
-												<TableHead>Цена</TableHead>
 												<TableHead>Рейтинг</TableHead>
 												<TableHead className="text-right">
 													Действия
 												</TableHead>
 											</TableRow>
 										</TableHeader>
+
 										<TableBody>
 											{quests.map((quest) => (
 												<TableRow key={quest.id}>
 													<TableCell className="font-medium">
 														<div className="flex items-center space-x-3">
-															<img
-																src={
-																	quest
-																		.images[0]
-																}
-																className="h-10 w-10 flex-shrink-0 rounded object-cover"
-															/>
+															{quest.images[0] ? (
+																<img
+																	src={
+																		quest
+																			.images[0]
+																	}
+																	className="h-10 w-10 flex-shrink-0 rounded object-cover"
+																	alt=""
+																/>
+															) : (
+																<div className="bg-muted h-10 w-10 flex-shrink-0 rounded" />
+															)}
 															<span className="break-words">
 																{quest.title}
 															</span>
@@ -2342,9 +2505,6 @@ export default function AdminPage() {
 														</Button>
 													</TableCell>
 													<TableCell>
-														{quest.price} ₽
-													</TableCell>
-													<TableCell>
 														{quest.rating} (
 														{quest.reviewsCount})
 													</TableCell>
@@ -2384,12 +2544,12 @@ export default function AdminPage() {
 					</Card>
 				</TabsContent>
 
-				{/* Achievements Tab - компактная версия */}
 				<TabsContent value="achievements" className="space-y-6">
 					<div className="flex items-center justify-between">
 						<h2 className="text-foreground text-xl font-semibold">
 							Управление достижениями
 						</h2>
+
 						<Dialog
 							open={isCreateAchievementDialogOpen}
 							onOpenChange={(open) => {
@@ -2403,6 +2563,7 @@ export default function AdminPage() {
 									Создать достижение
 								</Button>
 							</DialogTrigger>
+
 							<DialogContent className="max-w-2xl">
 								<DialogHeader>
 									<DialogTitle>
@@ -2417,6 +2578,7 @@ export default function AdminPage() {
 											: 'Заполните информацию о новом достижении'}
 									</DialogDescription>
 								</DialogHeader>
+
 								<div className="grid max-h-[60vh] gap-4 overflow-y-auto py-4">
 									{renderField(
 										'Название *',
@@ -2424,15 +2586,20 @@ export default function AdminPage() {
 										<Input
 											value={achievementForm.name}
 											onChange={(e) => {
-												setAchievementForm({
-													...achievementForm,
+												setAchievementForm((prev) => ({
+													...prev,
 													name: e.target.value
-												})
-												if (achievementFormErrors.name)
-													setAchievementFormErrors({
-														...achievementFormErrors,
-														name: ''
-													})
+												}))
+												if (
+													achievementFormErrors.name
+												) {
+													setAchievementFormErrors(
+														(prev) => ({
+															...prev,
+															name: ''
+														})
+													)
+												}
 											}}
 											placeholder="Например: Исследователь"
 										/>,
@@ -2446,17 +2613,20 @@ export default function AdminPage() {
 											rows={2}
 											value={achievementForm.description}
 											onChange={(e) => {
-												setAchievementForm({
-													...achievementForm,
+												setAchievementForm((prev) => ({
+													...prev,
 													description: e.target.value
-												})
+												}))
 												if (
 													achievementFormErrors.description
-												)
-													setAchievementFormErrors({
-														...achievementFormErrors,
-														description: ''
-													})
+												) {
+													setAchievementFormErrors(
+														(prev) => ({
+															...prev,
+															description: ''
+														})
+													)
+												}
 											}}
 											placeholder="Описание достижения"
 										/>,
@@ -2471,7 +2641,9 @@ export default function AdminPage() {
 												const newParams: Record<
 													string,
 													any
-												> = { threshold: 10 }
+												> = {
+													threshold: 10
+												}
 												if (
 													v ===
 														'SPECIFIC_QUEST_COMPLETED' ||
@@ -2479,11 +2651,11 @@ export default function AdminPage() {
 												) {
 													newParams.quest_id = ''
 												}
-												setAchievementForm({
-													...achievementForm,
+												setAchievementForm((prev) => ({
+													...prev,
 													rule_type: v,
 													rule_params: newParams
-												})
+												}))
 											}}
 										>
 											<SelectTrigger>
@@ -2516,22 +2688,25 @@ export default function AdminPage() {
 															.quest_id || ''
 													}
 													onValueChange={(v) => {
-														setAchievementForm({
-															...achievementForm,
-															rule_params: {
-																...achievementForm.rule_params,
-																quest_id: v
-															}
-														})
+														setAchievementForm(
+															(prev) => ({
+																...prev,
+																rule_params: {
+																	...prev.rule_params,
+																	quest_id: v
+																}
+															})
+														)
 														if (
 															achievementFormErrors.quest_id
-														)
+														) {
 															setAchievementFormErrors(
-																{
-																	...achievementFormErrors,
+																(prev) => ({
+																	...prev,
 																	quest_id: ''
-																}
+																})
 															)
+														}
 													}}
 												>
 													<SelectTrigger
@@ -2566,22 +2741,25 @@ export default function AdminPage() {
 															.quest_id || ''
 													}
 													onValueChange={(v) => {
-														setAchievementForm({
-															...achievementForm,
-															rule_params: {
-																...achievementForm.rule_params,
-																quest_id: v
-															}
-														})
+														setAchievementForm(
+															(prev) => ({
+																...prev,
+																rule_params: {
+																	...prev.rule_params,
+																	quest_id: v
+																}
+															})
+														)
 														if (
 															achievementFormErrors.quest_id
-														)
+														) {
 															setAchievementFormErrors(
-																{
-																	...achievementFormErrors,
+																(prev) => ({
+																	...prev,
 																	quest_id: ''
-																}
+																})
 															)
+														}
 													}}
 												>
 													<SelectTrigger
@@ -2604,6 +2782,7 @@ export default function AdminPage() {
 														))}
 													</SelectContent>
 												</Select>
+
 												<div className="mt-2 grid gap-2">
 													<Label>
 														Количество баллов *
@@ -2617,28 +2796,32 @@ export default function AdminPage() {
 																.threshold
 														}
 														onChange={(e) => {
-															setAchievementForm({
-																...achievementForm,
-																rule_params: {
-																	...achievementForm.rule_params,
-																	threshold:
-																		Number(
-																			e
-																				.target
-																				.value
-																		)
-																}
-															})
+															setAchievementForm(
+																(prev) => ({
+																	...prev,
+																	rule_params:
+																		{
+																			...prev.rule_params,
+																			threshold:
+																				Number(
+																					e
+																						.target
+																						.value
+																				)
+																		}
+																})
+															)
 															if (
 																achievementFormErrors.threshold
-															)
+															) {
 																setAchievementFormErrors(
-																	{
-																		...achievementFormErrors,
+																	(prev) => ({
+																		...prev,
 																		threshold:
 																			''
-																	}
+																	})
 																)
+															}
 														}}
 													/>
 												</div>
@@ -2657,31 +2840,36 @@ export default function AdminPage() {
 															.threshold
 													}
 													onChange={(e) => {
-														setAchievementForm({
-															...achievementForm,
-															rule_params: {
-																...achievementForm.rule_params,
-																threshold:
-																	Number(
-																		e.target
-																			.value
-																	)
-															}
-														})
+														setAchievementForm(
+															(prev) => ({
+																...prev,
+																rule_params: {
+																	...prev.rule_params,
+																	threshold:
+																		Number(
+																			e
+																				.target
+																				.value
+																		)
+																}
+															})
+														)
 														if (
 															achievementFormErrors.threshold
-														)
+														) {
 															setAchievementFormErrors(
-																{
-																	...achievementFormErrors,
+																(prev) => ({
+																	...prev,
 																	threshold:
 																		''
-																}
+																})
 															)
+														}
 													}}
 												/>
 											</>
 										)}
+
 										{achievementFormErrors.threshold && (
 											<div className="flex items-center gap-1 text-sm text-red-500">
 												<AlertCircle className="h-4 w-4" />
@@ -2692,6 +2880,7 @@ export default function AdminPage() {
 												</span>
 											</div>
 										)}
+
 										{achievementFormErrors.quest_id && (
 											<div className="flex items-center gap-1 text-sm text-red-500">
 												<AlertCircle className="h-4 w-4" />
@@ -2723,6 +2912,7 @@ export default function AdminPage() {
 												}
 											}}
 										/>
+
 										{achievementImagePreview && (
 											<div className="relative mt-2 h-24 w-24">
 												<img
@@ -2730,8 +2920,10 @@ export default function AdminPage() {
 														achievementImagePreview
 													}
 													className="h-full w-full rounded-lg object-cover"
+													alt=""
 												/>
 												<button
+													type="button"
 													onClick={() => {
 														setAchievementImageFile(
 															null
@@ -2739,10 +2931,12 @@ export default function AdminPage() {
 														setAchievementImagePreview(
 															''
 														)
-														setAchievementForm({
-															...achievementForm,
-															image_url: ''
-														})
+														setAchievementForm(
+															(prev) => ({
+																...prev,
+																image_url: ''
+															})
+														)
 													}}
 													className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 hover:bg-red-600"
 												>
@@ -2752,6 +2946,7 @@ export default function AdminPage() {
 										)}
 									</div>
 								</div>
+
 								<DialogFooter>
 									<Button
 										variant="outline"
@@ -2779,7 +2974,6 @@ export default function AdminPage() {
 						</Dialog>
 					</div>
 
-					{/* Компактная сетка достижений */}
 					<div className="grid grid-cols-1 gap-3 md:grid-cols-4">
 						{isLoadingAchievements ? (
 							<div className="col-span-4 flex justify-center py-8">
@@ -2795,6 +2989,7 @@ export default function AdminPage() {
 						) : (
 							achievements.map((ach) => {
 								let ruleText = ''
+
 								if (
 									ach.rule_type === 'SPECIFIC_QUEST_COMPLETED'
 								) {
@@ -2824,7 +3019,6 @@ export default function AdminPage() {
 									>
 										<CardContent className="p-3">
 											<div className="flex items-start gap-2">
-												{/* Иконка/изображение */}
 												{ach.image_url ? (
 													<img
 														src={ach.image_url}
@@ -2837,7 +3031,6 @@ export default function AdminPage() {
 													</div>
 												)}
 
-												{/* Контент */}
 												<div className="min-w-0 flex-1">
 													<h3 className="truncate text-sm font-semibold">
 														{ach.name}
@@ -2850,7 +3043,6 @@ export default function AdminPage() {
 													</p>
 												</div>
 
-												{/* Кнопки действий - компактные */}
 												<div className="flex flex-shrink-0 items-center gap-0.5">
 													<Button
 														variant="ghost"
@@ -2887,7 +3079,6 @@ export default function AdminPage() {
 				</TabsContent>
 			</Tabs>
 
-			{/* Points Management Dialog */}
 			<Dialog
 				open={isPointsDialogOpen}
 				onOpenChange={(open) => {
@@ -2968,6 +3159,7 @@ export default function AdminPage() {
 												</div>
 											</div>
 										</CardHeader>
+
 										{expandedPoints.includes(point.id) && (
 											<CardContent className="space-y-3 border-t pt-3">
 												<div>
@@ -2978,6 +3170,7 @@ export default function AdminPage() {
 														{point.description}
 													</p>
 												</div>
+
 												{point.short_description && (
 													<div>
 														<Label className="text-xs">
@@ -2990,6 +3183,7 @@ export default function AdminPage() {
 														</p>
 													</div>
 												)}
+
 												<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 													{point.image_url && (
 														<div>
@@ -3001,9 +3195,11 @@ export default function AdminPage() {
 																	point.image_url
 																}
 																className="mt-1 h-28 w-full rounded object-cover"
+																alt=""
 															/>
 														</div>
 													)}
+
 													{point.audio_record_url && (
 														<div>
 															<Label className="text-xs">
@@ -3022,6 +3218,7 @@ export default function AdminPage() {
 														</div>
 													)}
 												</div>
+
 												{point.latitude &&
 													point.longitude && (
 														<div>
@@ -3037,6 +3234,7 @@ export default function AdminPage() {
 															</p>
 														</div>
 													)}
+
 												<div className="flex justify-end space-x-2 pt-2">
 													<Button
 														variant="outline"
@@ -3047,7 +3245,7 @@ export default function AdminPage() {
 															)
 														}
 													>
-														<Pencil className="mr-1 h-3 w-3" />{' '}
+														<Pencil className="mr-1 h-3 w-3" />
 														Редактировать
 													</Button>
 													<Button
@@ -3059,7 +3257,7 @@ export default function AdminPage() {
 															)
 														}
 													>
-														<Trash2 className="mr-1 h-3 w-3" />{' '}
+														<Trash2 className="mr-1 h-3 w-3" />
 														Удалить
 													</Button>
 												</div>
@@ -3078,15 +3276,16 @@ export default function AdminPage() {
 									<Input
 										value={pointForm.name}
 										onChange={(e) => {
-											setPointForm({
-												...pointForm,
+											setPointForm((prev) => ({
+												...prev,
 												name: e.target.value
-											})
-											if (pointFormErrors.name)
-												setPointFormErrors({
-													...pointFormErrors,
+											}))
+											if (pointFormErrors.name) {
+												setPointFormErrors((prev) => ({
+													...prev,
 													name: ''
-												})
+												}))
+											}
 										}}
 									/>,
 									pointFormErrors.name
@@ -3113,21 +3312,24 @@ export default function AdminPage() {
 												: 'Улучшить AI'}
 										</Button>
 									</div>
+
 									<Textarea
 										rows={3}
 										value={pointForm.description}
 										onChange={(e) => {
-											setPointForm({
-												...pointForm,
+											setPointForm((prev) => ({
+												...prev,
 												description: e.target.value
-											})
-											if (pointFormErrors.description)
-												setPointFormErrors({
-													...pointFormErrors,
+											}))
+											if (pointFormErrors.description) {
+												setPointFormErrors((prev) => ({
+													...prev,
 													description: ''
-												})
+												}))
+											}
 										}}
 									/>
+
 									{pointFormErrors.description && (
 										<div className="flex items-center gap-1 text-sm text-red-500">
 											<AlertCircle className="h-3 w-3" />
@@ -3144,10 +3346,10 @@ export default function AdminPage() {
 										rows={2}
 										value={pointForm.shortDescription}
 										onChange={(e) =>
-											setPointForm({
-												...pointForm,
+											setPointForm((prev) => ({
+												...prev,
 												shortDescription: e.target.value
-											})
+											}))
 										}
 									/>
 								</div>
@@ -3159,13 +3361,14 @@ export default function AdminPage() {
 											type="number"
 											value={pointForm.score}
 											onChange={(e) =>
-												setPointForm({
-													...pointForm,
+												setPointForm((prev) => ({
+													...prev,
 													score: e.target.value
-												})
+												}))
 											}
 										/>
 									</div>
+
 									<div className="grid gap-1">
 										<Label className="text-xs">
 											Порядок
@@ -3174,10 +3377,10 @@ export default function AdminPage() {
 											type="number"
 											value={pointForm.priority}
 											onChange={(e) =>
-												setPointForm({
-													...pointForm,
+												setPointForm((prev) => ({
+													...prev,
 													priority: e.target.value
-												})
+												}))
 											}
 										/>
 									</div>
@@ -3192,13 +3395,14 @@ export default function AdminPage() {
 											placeholder="54.6295"
 											value={pointForm.latitude}
 											onChange={(e) =>
-												setPointForm({
-													...pointForm,
+												setPointForm((prev) => ({
+													...prev,
 													latitude: e.target.value
-												})
+												}))
 											}
 										/>
 									</div>
+
 									<div className="grid gap-1">
 										<Label className="text-xs">
 											Долгота
@@ -3207,10 +3411,10 @@ export default function AdminPage() {
 											placeholder="39.7421"
 											value={pointForm.longitude}
 											onChange={(e) =>
-												setPointForm({
-													...pointForm,
+												setPointForm((prev) => ({
+													...prev,
 													longitude: e.target.value
-												})
+												}))
 											}
 										/>
 									</div>
@@ -3237,6 +3441,7 @@ export default function AdminPage() {
 										<img
 											src={pointImagePreview}
 											className="h-24 w-full rounded object-cover"
+											alt=""
 										/>
 									)}
 								</div>
@@ -3266,6 +3471,7 @@ export default function AdminPage() {
 									)}
 								</div>
 							</div>
+
 							<DialogFooter>
 								<Button
 									variant="outline"
@@ -3294,7 +3500,6 @@ export default function AdminPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* Edit Point Dialog */}
 			<Dialog
 				open={isEditPointDialogOpen}
 				onOpenChange={setIsEditPointDialogOpen}
@@ -3306,6 +3511,7 @@ export default function AdminPage() {
 							Измените информацию о точке маршрута
 						</DialogDescription>
 					</DialogHeader>
+
 					<div className="grid gap-4 py-4">
 						{renderField(
 							'Название точки *',
@@ -3313,15 +3519,16 @@ export default function AdminPage() {
 							<Input
 								value={pointForm.name}
 								onChange={(e) => {
-									setPointForm({
-										...pointForm,
+									setPointForm((prev) => ({
+										...prev,
 										name: e.target.value
-									})
-									if (pointFormErrors.name)
-										setPointFormErrors({
-											...pointFormErrors,
+									}))
+									if (pointFormErrors.name) {
+										setPointFormErrors((prev) => ({
+											...prev,
 											name: ''
-										})
+										}))
+									}
 								}}
 							/>,
 							pointFormErrors.name
@@ -3346,21 +3553,24 @@ export default function AdminPage() {
 										: 'Улучшить AI'}
 								</Button>
 							</div>
+
 							<Textarea
 								rows={3}
 								value={pointForm.description}
 								onChange={(e) => {
-									setPointForm({
-										...pointForm,
+									setPointForm((prev) => ({
+										...prev,
 										description: e.target.value
-									})
-									if (pointFormErrors.description)
-										setPointFormErrors({
-											...pointFormErrors,
+									}))
+									if (pointFormErrors.description) {
+										setPointFormErrors((prev) => ({
+											...prev,
 											description: ''
-										})
+										}))
+									}
 								}}
 							/>
+
 							{pointFormErrors.description && (
 								<div className="flex items-center gap-1 text-sm text-red-500">
 									<AlertCircle className="h-3 w-3" />
@@ -3375,10 +3585,10 @@ export default function AdminPage() {
 								rows={2}
 								value={pointForm.shortDescription}
 								onChange={(e) =>
-									setPointForm({
-										...pointForm,
+									setPointForm((prev) => ({
+										...prev,
 										shortDescription: e.target.value
-									})
+									}))
 								}
 							/>
 						</div>
@@ -3390,23 +3600,24 @@ export default function AdminPage() {
 									type="number"
 									value={pointForm.score}
 									onChange={(e) =>
-										setPointForm({
-											...pointForm,
+										setPointForm((prev) => ({
+											...prev,
 											score: e.target.value
-										})
+										}))
 									}
 								/>
 							</div>
+
 							<div className="grid gap-1">
 								<Label className="text-xs">Порядок</Label>
 								<Input
 									type="number"
 									value={pointForm.priority}
 									onChange={(e) =>
-										setPointForm({
-											...pointForm,
+										setPointForm((prev) => ({
+											...prev,
 											priority: e.target.value
-										})
+										}))
 									}
 								/>
 							</div>
@@ -3419,23 +3630,24 @@ export default function AdminPage() {
 									placeholder="54.6295"
 									value={pointForm.latitude}
 									onChange={(e) =>
-										setPointForm({
-											...pointForm,
+										setPointForm((prev) => ({
+											...prev,
 											latitude: e.target.value
-										})
+										}))
 									}
 								/>
 							</div>
+
 							<div className="grid gap-1">
 								<Label className="text-xs">Долгота</Label>
 								<Input
 									placeholder="39.7421"
 									value={pointForm.longitude}
 									onChange={(e) =>
-										setPointForm({
-											...pointForm,
+										setPointForm((prev) => ({
+											...prev,
 											longitude: e.target.value
-										})
+										}))
 									}
 								/>
 							</div>
@@ -3450,6 +3662,7 @@ export default function AdminPage() {
 									<img
 										src={editingPoint.image_url}
 										className="h-32 w-full rounded object-cover"
+										alt=""
 									/>
 									<Button
 										type="button"
@@ -3485,6 +3698,7 @@ export default function AdminPage() {
 								<img
 									src={pointImagePreview}
 									className="mt-1 h-24 w-full rounded object-cover"
+									alt=""
 								/>
 							)}
 						</div>
@@ -3533,6 +3747,7 @@ export default function AdminPage() {
 							)}
 						</div>
 					</div>
+
 					<DialogFooter>
 						<Button
 							variant="outline"
@@ -3555,7 +3770,6 @@ export default function AdminPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* Delete Point Confirmation Dialog */}
 			<Dialog
 				open={deletePointDialogOpen}
 				onOpenChange={setDeletePointDialogOpen}
@@ -3572,6 +3786,7 @@ export default function AdminPage() {
 							отменить.
 						</DialogDescription>
 					</DialogHeader>
+
 					<DialogFooter className="gap-2 sm:gap-0">
 						<Button
 							variant="outline"
@@ -3589,7 +3804,6 @@ export default function AdminPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* Delete Achievement Confirmation Dialog */}
 			<Dialog
 				open={deleteAchievementDialogOpen}
 				onOpenChange={setDeleteAchievementDialogOpen}
@@ -3606,6 +3820,7 @@ export default function AdminPage() {
 							отменить.
 						</DialogDescription>
 					</DialogHeader>
+
 					<DialogFooter className="gap-2 sm:gap-0">
 						<Button
 							variant="outline"
