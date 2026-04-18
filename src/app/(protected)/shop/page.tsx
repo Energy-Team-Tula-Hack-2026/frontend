@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -45,6 +45,7 @@ import {
 	DialogTitle
 } from '@/shared/components/ui/dialog'
 import { Input } from '@/shared/components/ui/input'
+import { Label } from '@/shared/components/ui/label'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import {
 	Tabs,
@@ -99,6 +100,9 @@ export default function ShopPage() {
 	const [activeItem, setActiveItem] = useState<ShopItemDto | null>(null)
 	const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 	const [isDetailsLoading, setIsDetailsLoading] = useState(false)
+	const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false)
+	const [buyItem, setBuyItem] = useState<ShopItemDto | null>(null)
+	const [buyQuantity, setBuyQuantity] = useState(1)
 
 	const filteredItems = useMemo(
 		() =>
@@ -224,6 +228,23 @@ export default function ShopPage() {
 		}
 	}
 
+	const openBuyDialog = (item: ShopItemDto) => {
+		setBuyItem(item)
+		setBuyQuantity(1)
+		setIsBuyDialogOpen(true)
+	}
+
+	const confirmBuyWithSelectedQuantity = async () => {
+		if (!buyItem) return
+		const max = Math.max(1, buyItem.quantity)
+		const normalizedQuantity = Math.min(
+			max,
+			Math.max(1, Number.isFinite(buyQuantity) ? buyQuantity : 1)
+		)
+		setIsBuyDialogOpen(false)
+		await handleBuy(buyItem.id, normalizedQuantity)
+	}
+
 	return (
 		<div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
 			<section className="relative overflow-hidden rounded-3xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-8 dark:border-emerald-900/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-cyan-950/20">
@@ -322,7 +343,7 @@ export default function ShopPage() {
 																	src={getImage(
 																		imageUrl
 																	)}
-																	alt={`${item.title} — фото ${index + 1}`}
+																	alt={`${item.title} - фото ${index + 1}`}
 																	className="h-44 w-full object-cover"
 																	onError={(
 																		event
@@ -423,7 +444,12 @@ export default function ShopPage() {
 														: 'secondary'
 												}
 												onClick={() =>
-													void handleBuy(item.id, 1)
+													canContinuePayment
+														? void handleBuy(
+																item.id,
+																1
+															)
+														: openBuyDialog(item)
 												}
 												disabled={
 													(isOutOfStock &&
@@ -456,7 +482,7 @@ export default function ShopPage() {
 						<CardContent className="space-y-3">
 							{cart.length === 0 && (
 								<p className="text-muted-foreground text-sm">
-									Корзина пока пустая.
+									Корзина пока пуста.
 								</p>
 							)}
 							{cart.map((line) => {
@@ -490,7 +516,8 @@ export default function ShopPage() {
 											{isOutOfStock &&
 												!canContinuePayment && (
 													<p className="text-sm text-red-600">
-														Товара нет в наличии
+														РўРѕРІР°СЂР° РЅРµС‚ РІ
+														РЅР°Р»РёС‡РёРё
 													</p>
 												)}
 											{!isOutOfStock && exceedsStock && (
@@ -524,7 +551,7 @@ export default function ShopPage() {
 														const apiError =
 															normalizeApiError(
 																error,
-																'Не удалось изменить количество'
+																'РќРµ СѓРґР°Р»РѕСЃСЊ РёР·РјРµРЅРёС‚СЊ РєРѕР»РёС‡РµСЃС‚РІРѕ'
 															)
 														toast.error(
 															apiError.message
@@ -704,8 +731,8 @@ export default function ShopPage() {
 											{purchase.is_cancelled
 												? 'Отменена'
 												: purchase.confirmed
-													? 'Подтверждена'
-													: 'Ожидает оплату'}
+													? 'Куплен'
+													: 'Ожидает оплаты'}
 										</Badge>
 									</div>
 									<p className="text-muted-foreground mt-1">
@@ -755,7 +782,7 @@ export default function ShopPage() {
 												>
 													<img
 														src={getImage(imageUrl)}
-														alt={`${activeItem.title} — фото ${index + 1}`}
+														alt={`${activeItem.title} вЂ” С„РѕС‚Рѕ ${index + 1}`}
 														className="h-52 w-full object-cover md:h-full"
 														onError={(event) => {
 															event.currentTarget.src =
@@ -809,10 +836,14 @@ export default function ShopPage() {
 													!canContinuePayment
 												}
 												onClick={() =>
-													void handleBuy(
-														activeItem.id,
-														1
-													)
+													canContinuePayment
+														? void handleBuy(
+																activeItem.id,
+																1
+															)
+														: openBuyDialog(
+																activeItem
+															)
 												}
 											>
 												{canContinuePayment
@@ -831,7 +862,7 @@ export default function ShopPage() {
 										>
 											<Button variant="outline">
 												<ExternalLink className="mr-2 h-4 w-4" />
-												Сайт товара
+												Перейти на сайт продавца
 											</Button>
 										</a>
 									) : null}
@@ -842,6 +873,83 @@ export default function ShopPage() {
 										Закрыть
 									</Button>
 								</div>
+							</div>
+						</div>
+					) : null}
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={isBuyDialogOpen} onOpenChange={setIsBuyDialogOpen}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Выбор количества</DialogTitle>
+						<DialogDescription>
+							Выберите сколько штук хотите купить перед оплатой.
+						</DialogDescription>
+					</DialogHeader>
+					{buyItem ? (
+						<div className="space-y-4">
+							<div>
+								<p className="font-medium">{buyItem.title}</p>
+								<p className="text-muted-foreground text-sm">
+									В наличии: {buyItem.quantity}
+								</p>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="buy-quantity">Количество</Label>
+								<Input
+									id="buy-quantity"
+									type="number"
+									min={1}
+									max={Math.max(1, buyItem.quantity)}
+									value={buyQuantity}
+									onChange={(event) => {
+										const max = Math.max(
+											1,
+											buyItem.quantity
+										)
+										const next = Number(event.target.value)
+										setBuyQuantity(
+											Math.max(
+												1,
+												Math.min(
+													max,
+													Number.isFinite(next)
+														? next
+														: 1
+												)
+											)
+										)
+									}}
+								/>
+							</div>
+
+							<div className="rounded-lg border p-3 text-sm">
+								<span className="text-muted-foreground">
+									К оплате:{' '}
+								</span>
+								<span className="font-semibold">
+									{formatPrice(
+										buyItem.price * Math.max(1, buyQuantity)
+									)}
+								</span>
+							</div>
+
+							<div className="flex justify-end gap-2">
+								<Button
+									variant="outline"
+									onClick={() => setIsBuyDialogOpen(false)}
+								>
+									Отмена
+								</Button>
+								<Button
+									onClick={() =>
+										void confirmBuyWithSelectedQuantity()
+									}
+								>
+									Перейти к оплате
+								</Button>
 							</div>
 						</div>
 					) : null}

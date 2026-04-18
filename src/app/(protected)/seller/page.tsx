@@ -188,7 +188,9 @@ export default function SellerPage() {
 	}, [items, user?.id])
 
 	const resetEditState = () => {
-		resetEditState()
+		setEditingItem(null)
+		setEditForm(EMPTY_FORM)
+		setEditImageFiles([])
 		setEditExistingImageUrls([])
 	}
 
