@@ -24,7 +24,11 @@ export const useValidatePoint = () => {
 				const updatedPoints = (previousUser.points || []).map(
 					(p: UserPoint) =>
 						p.point_id === point.id
-							? { ...p, status: 'COMPLETED' as const }
+							? {
+									...p,
+									status: 'COMPLETED' as const,
+									is_completed: true
+								}
 							: p
 				)
 				const updatedUser: User = {

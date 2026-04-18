@@ -1,14 +1,29 @@
 'use client'
 
 import { notFound, useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Check, Clock, MapPin, QrCode, Trophy } from 'lucide-react'
+import {
+	ArrowLeft,
+	Check,
+	Clock,
+	Headphones,
+	Lock,
+	MapPin,
+	PartyPopper,
+	QrCode,
+	Route,
+	Sparkles
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 import { useQuest } from './use-quest'
 import { useSelf } from './use-self'
+import { useValidatePoint } from './use-validate-point'
 import { QrScanner } from './qr-scanner'
 import { MapView } from './map-view'
 
+import { normalizeApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import {
@@ -28,22 +43,9 @@ import {
 	DialogTitle
 } from '@/shared/components/ui/dialog'
 import { Spinner } from '@/shared/components/ui/spinner'
-import {
-	CraftTestQuestion,
-	detectCraftKind,
-	getCraftTestQuestions,
-	getProductsByCraftKind
-} from '@/shared/lib/craft-marketplace'
 
 type PointProgressState = {
 	completedPointIds: string[]
-}
-
-type QuestTestState = {
-	isCompleted: boolean
-	lastScore: number
-	totalQuestions: number
-	history: Array<{ date: string; score: number; total: number }>
 }
 
 type ScanState = {
@@ -56,9 +58,7 @@ function getProgressKey(questId: string, userId?: string) {
 	return `quest_progress_${questId}_${userId || 'guest'}`
 }
 
-function getTestKey(questId: string, userId?: string) {
-	return `quest_test_${questId}_${userId || 'guest'}`
-}
+const POINT_SCAN_ERROR_MESSAGE = 'Не удалось отметить точку квеста'
 
 export function Quest() {
 	const router = useRouter()
@@ -68,15 +68,10 @@ export function Quest() {
 
 	const { quest, isLoading, error } = useQuest(id)
 	const { user, isLoadingUser, errorUser } = useSelf()
+	const validatePoint = useValidatePoint()
 
 	const [progress, setProgress] = useState<PointProgressState>({
 		completedPointIds: []
-	})
-	const [testState, setTestState] = useState<QuestTestState>({
-		isCompleted: false,
-		lastScore: 0,
-		totalQuestions: 0,
-		history: []
 	})
 
 	const [isScannerOpen, setIsScannerOpen] = useState(false)
@@ -86,35 +81,24 @@ export function Quest() {
 		type: 'success',
 		message: ''
 	})
-	const [isTestDialogOpen, setIsTestDialogOpen] = useState(false)
-	const [selectedAnswers, setSelectedAnswers] = useState<
-		Record<string, number>
-	>({})
-
-	const hasLocalAccess = useMemo(() => {
-		if (typeof window === 'undefined') return false
-		return localStorage.getItem(`quest_access_${id}`) === 'started'
-	}, [id])
 
 	const storageUserId = user?.email || 'guest'
 
 	useEffect(() => {
 		if (!quest) return
 		const key = getProgressKey(quest.id, storageUserId)
-		const testKey = getTestKey(quest.id, storageUserId)
+		const questPointIds = new Set(quest.points.map((point) => point.id))
 
 		const fromBackendCompleted =
 			user?.points
-				?.filter((point) => point.status === 'COMPLETED')
+				?.filter(
+					(point) =>
+						questPointIds.has(point.point_id) &&
+						(point.is_completed || point.status === 'COMPLETED')
+				)
 				.map((point) => point.point_id) ?? []
 
 		let localProgress: PointProgressState = { completedPointIds: [] }
-		let localTestState: QuestTestState = {
-			isCompleted: false,
-			lastScore: 0,
-			totalQuestions: 0,
-			history: []
-		}
 
 		if (typeof window !== 'undefined') {
 			const rawProgress = localStorage.getItem(key)
@@ -123,20 +107,6 @@ export function Quest() {
 					localProgress = JSON.parse(rawProgress)
 				} catch {
 					localProgress = { completedPointIds: [] }
-				}
-			}
-
-			const rawTest = localStorage.getItem(testKey)
-			if (rawTest) {
-				try {
-					localTestState = JSON.parse(rawTest)
-				} catch {
-					localTestState = {
-						isCompleted: false,
-						lastScore: 0,
-						totalQuestions: 0,
-						history: []
-					}
 				}
 			}
 		}
@@ -148,7 +118,6 @@ export function Quest() {
 			])
 		)
 		setProgress({ completedPointIds: merged })
-		setTestState(localTestState)
 	}, [quest, storageUserId, user?.points])
 
 	const sortedPoints = useMemo(() => {
@@ -168,21 +137,6 @@ export function Quest() {
 			progress.completedPointIds.includes(point.id)
 		)
 
-	const testQuestions = useMemo<CraftTestQuestion[]>(() => {
-		if (!quest) return []
-		const kind = detectCraftKind(`${quest.name} ${quest.description}`)
-		return getCraftTestQuestions(
-			kind,
-			sortedPoints.map((point) => point.name)
-		)
-	}, [quest, sortedPoints])
-
-	const adsProducts = useMemo(() => {
-		if (!quest) return []
-		const kind = detectCraftKind(`${quest.name} ${quest.description}`)
-		return getProductsByCraftKind(kind).slice(0, 3)
-	}, [quest])
-
 	if (isLoading || isLoadingUser) {
 		return (
 			<div className="flex min-h-[70vh] items-center justify-center">
@@ -191,15 +145,18 @@ export function Quest() {
 		)
 	}
 
-	if (error || errorUser || !quest || (!user && !hasLocalAccess)) {
+	if (error || errorUser || !quest || !user) {
 		notFound()
 	}
 
 	const totalScore = sortedPoints.reduce((sum, point) => sum + point.score, 0)
-	const completedCount = progress.completedPointIds.length
+	const completedPointIds = progress.completedPointIds.filter((pointId) =>
+		sortedPoints.some((point) => point.id === pointId)
+	)
+	const completedCount = completedPointIds.length
 	const progressPercent =
 		sortedPoints.length > 0
-			? (completedCount / sortedPoints.length) * 100
+			? Math.min((completedCount / sortedPoints.length) * 100, 100)
 			: 0
 
 	const saveProgress = (next: PointProgressState) => {
@@ -212,26 +169,19 @@ export function Quest() {
 		}
 	}
 
-	const saveTestState = (next: QuestTestState) => {
-		setTestState(next)
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(
-				getTestKey(quest.id, storageUserId),
-				JSON.stringify(next)
-			)
-		}
-	}
-
-	const handleScanCode = (rawCode: string) => {
-		const code = rawCode.trim()
+	const handleScanCode = async (rawCode: string) => {
+		const code = rawCode.trim().toUpperCase()
 		setManualCode('')
-		setIsScannerOpen(false)
 
-		if (testState.isCompleted) {
+		if (!code || validatePoint.isPending) {
+			return
+		}
+
+		if (allPointsCompleted) {
 			setScanState({
 				open: true,
-				type: 'error',
-				message: 'Тест уже завершен. Повторное сканирование отключено.'
+				type: 'success',
+				message: 'Все точки уже пройдены.'
 			})
 			return
 		}
@@ -246,6 +196,7 @@ export function Quest() {
 		}
 
 		if (currentPoint.code !== code) {
+			setIsScannerOpen(false)
 			setScanState({
 				open: true,
 				type: 'error',
@@ -255,70 +206,42 @@ export function Quest() {
 			return
 		}
 
-		const nextProgress: PointProgressState = {
-			completedPointIds: [...progress.completedPointIds, currentPoint.id]
-		}
-		saveProgress(nextProgress)
+		try {
+			await validatePoint.mutateAsync({ code, point: currentPoint })
 
-		setScanState({
-			open: true,
-			type: 'success',
-			message: `Точка "${currentPoint.name}" пройдена. +${currentPoint.score} баллов.`
-		})
-	}
+			const nextCompletedIds = Array.from(
+				new Set([...progress.completedPointIds, currentPoint.id])
+			)
+			const nextQuestCompletedCount = nextCompletedIds.filter((pointId) =>
+				sortedPoints.some((point) => point.id === pointId)
+			).length
+			saveProgress({ completedPointIds: nextCompletedIds })
+			setIsScannerOpen(false)
 
-	const handleSubmitTest = () => {
-		const answeredCount = Object.keys(selectedAnswers).length
-		if (answeredCount !== testQuestions.length) {
+			const isLastPoint = nextQuestCompletedCount >= sortedPoints.length
+
+			setScanState({
+				open: true,
+				type: 'success',
+				message: isLastPoint
+					? 'Поздравляем! Вы прошли все точки квеста.'
+					: `Точка "${currentPoint.name}" пройдена. Следующая точка уже доступна.`
+			})
+			toast.success(
+				isLastPoint
+					? 'Квест завершён'
+					: `Точка "${currentPoint.name}" пройдена`
+			)
+		} catch (err) {
+			const apiError = normalizeApiError(err, POINT_SCAN_ERROR_MESSAGE)
+			setIsScannerOpen(false)
 			setScanState({
 				open: true,
 				type: 'error',
-				message: 'Ответьте на все вопросы теста.'
+				message: apiError.message
 			})
-			return
+			toast.error(apiError.message)
 		}
-
-		const score = testQuestions.reduce((acc, question) => {
-			return (
-				acc +
-				(selectedAnswers[question.id] === question.correctIndex ? 1 : 0)
-			)
-		}, 0)
-
-		const passedPointIds = sortedPoints
-			.map((point, index) => {
-				const relatedQuestion = testQuestions[index]
-				if (!relatedQuestion) return null
-				const isCorrect =
-					selectedAnswers[relatedQuestion.id] ===
-					relatedQuestion.correctIndex
-				return isCorrect ? point.id : null
-			})
-			.filter((value): value is string => Boolean(value))
-
-		saveProgress({ completedPointIds: passedPointIds })
-
-		const nextState: QuestTestState = {
-			isCompleted: true,
-			lastScore: score,
-			totalQuestions: testQuestions.length,
-			history: [
-				...testState.history,
-				{
-					date: new Date().toISOString(),
-					score,
-					total: testQuestions.length
-				}
-			]
-		}
-
-		saveTestState(nextState)
-		setIsTestDialogOpen(false)
-		setScanState({
-			open: true,
-			type: 'success',
-			message: `Тест завершен: ${score}/${testQuestions.length}. Засчитано точек: ${passedPointIds.length}/${sortedPoints.length}.`
-		})
 	}
 
 	return (
@@ -340,19 +263,54 @@ export function Quest() {
 				</div>
 			</div>
 
-			<div className="bg-card rounded-2xl border p-4 sm:p-5">
-				<h1 className="text-2xl font-semibold">{quest.name}</h1>
-				<p className="text-muted-foreground mt-2 text-sm sm:text-base">
-					{quest.description}
-				</p>
-				<div className="mt-4 max-w-md">
-					<div className="mb-2 flex items-center justify-between text-sm">
-						<span>Прогресс маршрута</span>
-						<span className="text-muted-foreground">
-							{completedCount} / {sortedPoints.length}
-						</span>
+			<div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 p-5 sm:p-7 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
+				<div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+					<div className="max-w-3xl">
+						<Badge className="mb-3 w-fit border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
+							<Sparkles className="mr-1 h-3.5 w-3.5" />
+							Прохождение квеста
+						</Badge>
+						<h1 className="text-2xl leading-tight font-semibold sm:text-4xl">
+							{quest.name}
+						</h1>
+						<p className="text-muted-foreground mt-3 text-sm leading-relaxed sm:text-base">
+							{quest.description}
+						</p>
+						<div className="mt-4 flex flex-wrap gap-2">
+							<Badge variant="outline">
+								<MapPin className="mr-1 h-3.5 w-3.5" />
+								{quest.location?.city_name ??
+									quest.location?.region_name ??
+									'Организация'}
+							</Badge>
+							<Badge variant="outline">
+								<Route className="mr-1 h-3.5 w-3.5" />
+								Точка организации на карте
+							</Badge>
+						</div>
 					</div>
-					<Progress value={progressPercent} className="h-2" />
+					<div className="bg-background/80 w-full rounded-xl border p-4 shadow-sm backdrop-blur lg:max-w-sm">
+						<div className="mb-2 flex items-center justify-between text-sm">
+							<span className="font-medium">Прогресс</span>
+							<span className="text-muted-foreground">
+								{completedCount} / {sortedPoints.length}
+							</span>
+						</div>
+						<Progress value={progressPercent} className="h-2" />
+						{currentPoint && (
+							<p className="text-muted-foreground mt-3 text-sm">
+								Текущая точка:{' '}
+								<span className="text-foreground font-medium">
+									{currentPoint.name}
+								</span>
+							</p>
+						)}
+						{allPointsCompleted && (
+							<p className="mt-3 text-sm font-medium text-green-700 dark:text-green-300">
+								Все точки пройдены
+							</p>
+						)}
+					</div>
 				</div>
 			</div>
 
@@ -363,14 +321,14 @@ export function Quest() {
 							<CardTitle className="text-lg">
 								Карта маршрута
 							</CardTitle>
+							<CardDescription>
+								На карте отображается организация, где проходит
+								квест.
+							</CardDescription>
 						</CardHeader>
 						<CardContent className="pt-0">
-							<div className="mx-auto w-full max-w-[860px] overflow-hidden rounded-xl border">
-								<MapView
-									quest={quest}
-									points={sortedPoints}
-									currentPoint={currentPoint}
-								/>
+							<div className="mx-auto w-full max-w-[860px]">
+								<MapView quest={quest} />
 							</div>
 						</CardContent>
 					</Card>
@@ -390,38 +348,44 @@ export function Quest() {
 								size="lg"
 								onClick={() => setIsScannerOpen(true)}
 								disabled={
-									!currentPoint || testState.isCompleted
+									!currentPoint ||
+									allPointsCompleted ||
+									validatePoint.isPending
 								}
 							>
 								<QrCode className="mr-2 h-5 w-5" />
-								{testState.isCompleted
-									? 'Прохождение закрыто'
+								{validatePoint.isPending
+									? 'Проверяем точку...'
 									: currentPoint
 										? `Сканировать: ${currentPoint.name}`
 										: 'Все точки пройдены'}
 							</Button>
 
-							{allPointsCompleted && !testState.isCompleted && (
-								<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-									<p className="text-sm font-medium">
-										Маршрут завершен, откройте тест
-									</p>
-									<Button
-										className="mt-3"
-										variant="secondary"
-										onClick={() =>
-											setIsTestDialogOpen(true)
-										}
-									>
-										Открыть тест
-									</Button>
-								</div>
-							)}
-
-							{testState.isCompleted && (
-								<div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm dark:border-green-900 dark:bg-green-950/20">
-									Тест завершен: {testState.lastScore}/
-									{testState.totalQuestions}
+							{allPointsCompleted && (
+								<div className="rounded-xl border border-green-200 bg-green-50 p-4 text-green-800 dark:border-green-900 dark:bg-green-950/20 dark:text-green-300">
+									<div className="flex items-start gap-3">
+										<PartyPopper className="mt-0.5 h-5 w-5 shrink-0" />
+										<div className="space-y-3">
+											<div>
+												<p className="font-semibold">
+													Поздравляем, квест завершён!
+												</p>
+												<p className="mt-1 text-sm">
+													Все точки пройдены. Ваш
+													прогресс можно посмотреть в
+													профиле.
+												</p>
+											</div>
+											<Link href="/profile">
+												<Button
+													variant="outline"
+													size="sm"
+												>
+													Перейти в профиль
+												</Button>
+											</Link>
+										</div>
+									</div>
 								</div>
 							)}
 						</CardContent>
@@ -431,28 +395,28 @@ export function Quest() {
 				<div className="space-y-6">
 					<Card className="lg:sticky lg:top-20">
 						<CardHeader className="pb-3">
-							<CardTitle className="text-lg">Чекпоинты</CardTitle>
-							<CardDescription>
-								Текущая точка подсвечена.
-							</CardDescription>
+							<CardTitle className="text-center text-lg">
+								Чекпоинты
+							</CardTitle>
 						</CardHeader>
-						<CardContent className="max-h-[62vh] space-y-2 overflow-y-auto pr-1">
+						<CardContent className="mx-auto max-h-[62vh] w-full max-w-md space-y-3 overflow-y-auto px-4">
 							{sortedPoints.map((point, index) => {
 								const completed =
 									progress.completedPointIds.includes(
 										point.id
 									)
 								const isCurrent = currentPoint?.id === point.id
+								const isLocked = !completed && !isCurrent
 
 								return (
 									<div
 										key={point.id}
-										className={`rounded-lg border p-3 ${
+										className={`rounded-xl border p-3 transition-all ${
 											completed
-												? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/20'
+												? 'border-green-200 bg-green-50 shadow-sm dark:border-green-900 dark:bg-green-950/20'
 												: isCurrent
-													? 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20'
-													: 'bg-background'
+													? 'border-amber-300 bg-amber-50 shadow-md ring-2 ring-amber-200/70 dark:border-amber-900 dark:bg-amber-950/20 dark:ring-amber-900/50'
+													: 'bg-muted/30 opacity-75'
 										}`}
 									>
 										<div className="flex items-start gap-2">
@@ -462,11 +426,13 @@ export function Quest() {
 														? 'border-green-500 bg-green-500 text-white'
 														: isCurrent
 															? 'border-amber-600 bg-amber-600 text-white'
-															: 'text-muted-foreground'
+															: 'border-muted-foreground/30 text-muted-foreground'
 												}`}
 											>
 												{completed ? (
 													<Check className="h-3.5 w-3.5" />
+												) : isLocked ? (
+													<Lock className="h-3.5 w-3.5" />
 												) : (
 													index + 1
 												)}
@@ -476,18 +442,40 @@ export function Quest() {
 													<p className="text-sm font-medium">
 														{point.name}
 													</p>
-													<Badge variant="secondary">
-														+{point.score}
+													<Badge
+														variant={
+															completed
+																? 'default'
+																: isCurrent
+																	? 'secondary'
+																	: 'outline'
+														}
+													>
+														{completed
+															? 'Пройдена'
+															: isCurrent
+																? 'Текущая'
+																: 'Закрыта'}
 													</Badge>
 												</div>
 												<p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
 													{point.short_description ||
 														point.description}
 												</p>
-												<div className="text-muted-foreground mt-2 flex items-center text-xs">
-													<MapPin className="mr-1 h-3.5 w-3.5 shrink-0" />
-													{point.latitude},{' '}
-													{point.longitude}
+												<div className="mt-2 flex flex-wrap items-center gap-2">
+													{point.audio_record_url && (
+														<div className="bg-background/70 flex w-full items-center gap-2 rounded-lg border p-2">
+															<Headphones className="h-4 w-4 shrink-0 text-amber-600" />
+															<audio
+																controls
+																preload="none"
+																src={
+																	point.audio_record_url
+																}
+																className="h-8 min-w-0 flex-1"
+															/>
+														</div>
+													)}
 												</div>
 											</div>
 										</div>
@@ -496,77 +484,6 @@ export function Quest() {
 							})}
 						</CardContent>
 					</Card>
-
-					<Card>
-						<CardHeader className="pb-3">
-							<CardTitle className="text-lg">
-								История теста
-							</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-2">
-							{testState.history.length === 0 && (
-								<p className="text-muted-foreground text-sm">
-									История пока пуста.
-								</p>
-							)}
-							{testState.history.map((item, index) => (
-								<div
-									key={`${item.date}-${index}`}
-									className="rounded-md border p-2 text-xs"
-								>
-									{new Date(item.date).toLocaleString(
-										'ru-RU'
-									)}{' '}
-									- {item.score}/{item.total}
-								</div>
-							))}
-						</CardContent>
-					</Card>
-				</div>
-			</section>
-
-			<section className="space-y-4">
-				<div className="flex items-center gap-2">
-					<Trophy className="h-5 w-5" />
-					<h2 className="text-xl font-semibold">
-						Товары организации
-					</h2>
-				</div>
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-					{adsProducts.map((product) => (
-						<Card key={product.id} className="overflow-hidden">
-							<img
-								src={
-									product.images[0] || '/placeholder-logo.png'
-								}
-								alt={product.title}
-								className="h-36 w-full object-cover"
-							/>
-							<CardContent className="space-y-2 p-4">
-								<p className="font-semibold">{product.title}</p>
-								<p className="text-muted-foreground line-clamp-2 text-sm">
-									{product.description}
-								</p>
-								<div className="flex items-center justify-between">
-									<Badge variant="secondary">
-										{product.category}
-									</Badge>
-									<span className="font-semibold">
-										{product.priceRub} ₽
-									</span>
-								</div>
-								<Button
-									variant="outline"
-									className="w-full"
-									onClick={() =>
-										router.push(`/shop/${product.id}`)
-									}
-								>
-									Открыть товар
-								</Button>
-							</CardContent>
-						</Card>
-					))}
 				</div>
 			</section>
 
@@ -589,20 +506,37 @@ export function Quest() {
 							<QrScanner
 								onScanSuccess={handleScanCode}
 								onError={() => {}}
-								disabled={!isScannerOpen}
+								disabled={
+									!isScannerOpen || validatePoint.isPending
+								}
 								className="aspect-square w-full"
 							/>
 						</div>
-						<div className="flex gap-2">
+						<form
+							className="flex gap-2"
+							onSubmit={(event) => {
+								event.preventDefault()
+								handleScanCode(manualCode)
+							}}
+						>
 							<Input
 								placeholder={currentPoint?.code || 'Код точки'}
 								value={manualCode}
 								onChange={(e) => setManualCode(e.target.value)}
+								disabled={validatePoint.isPending}
 							/>
-							<Button onClick={() => handleScanCode(manualCode)}>
-								Проверить
+							<Button
+								type="submit"
+								disabled={
+									validatePoint.isPending ||
+									!manualCode.trim()
+								}
+							>
+								{validatePoint.isPending
+									? 'Проверяем...'
+									: 'Проверить'}
 							</Button>
-						</div>
+						</form>
 					</div>
 				</DialogContent>
 			</Dialog>
@@ -622,55 +556,13 @@ export function Quest() {
 							{scanState.message}
 						</DialogDescription>
 					</DialogHeader>
-				</DialogContent>
-			</Dialog>
-
-			<Dialog open={isTestDialogOpen} onOpenChange={setIsTestDialogOpen}>
-				<DialogContent className="max-h-[90vh] overflow-auto sm:max-w-2xl">
-					<DialogHeader>
-						<DialogTitle>Тест по экскурсии</DialogTitle>
-						<DialogDescription>
-							После отправки тест блокируется, повторно пройти его
-							нельзя.
-						</DialogDescription>
-					</DialogHeader>
-					<div className="space-y-4 py-2">
-						{testQuestions.map((question, qIndex) => (
-							<div
-								key={question.id}
-								className="rounded-lg border p-4"
-							>
-								<p className="mb-3 font-medium">
-									{qIndex + 1}. {question.question}
-								</p>
-								<div className="space-y-2">
-									{question.options.map((option, index) => (
-										<button
-											key={`${question.id}-${index}`}
-											type="button"
-											className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-												selectedAnswers[question.id] ===
-												index
-													? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30'
-													: 'hover:bg-muted/60'
-											}`}
-											onClick={() =>
-												setSelectedAnswers((prev) => ({
-													...prev,
-													[question.id]: index
-												}))
-											}
-										>
-											{option}
-										</button>
-									))}
-								</div>
-							</div>
-						))}
-						<Button className="w-full" onClick={handleSubmitTest}>
-							Завершить тест
-						</Button>
-					</div>
+					{allPointsCompleted && scanState.type === 'success' && (
+						<Link href="/profile">
+							<Button className="w-full">
+								Перейти в профиль
+							</Button>
+						</Link>
+					)}
 				</DialogContent>
 			</Dialog>
 		</div>

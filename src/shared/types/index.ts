@@ -18,10 +18,11 @@ export type UserQuest = {
 export type UserPointStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 
 export type UserPoint = {
-	id: string
+	id?: string
 	user_id: string
 	point_id: string
-	status: UserPointStatus
+	status?: UserPointStatus
+	is_completed?: boolean
 	created_at: string
 	updated_at: string
 }
@@ -141,9 +142,10 @@ export interface ApiPoint {
 	short_description: string
 	code: string
 	score: number
-	latitude: number
-	longitude: number
+	latitude?: number
+	longitude?: number
 	priority: number
+	is_daily?: boolean
 	audio_record_url: string | null
 	image_url: string | null
 }
@@ -189,6 +191,14 @@ export interface ApiQuest {
 	level: 'EASY' | 'MEDIUM' | 'HARD'
 	rating: number | null
 	category: ApiCategory | null
+	location?: {
+		city_id?: string
+		city_name?: string
+		region_id?: string
+		region_name?: string
+		latitude?: number
+		longitude?: number
+	} | null
 	points: ApiPoint[]
 	images: ApiImage[]
 	quest_planning: ApiQuestPlanning | null

@@ -1,29 +1,39 @@
 'use client'
 
-import { ApiPoint, ApiQuest } from '@/shared'
 import { YMaps, Map, Placemark } from '@iminside/react-yandex-maps'
-import { useState } from 'react'
+import { Building2 } from 'lucide-react'
+
+import { ApiQuest } from '@/shared'
 import { LOCATIONS } from './values'
-import { Button } from '@/shared/components/ui/button'
 
 interface MapViewProps {
 	quest: ApiQuest
-	points?: ApiPoint[]
-	currentPoint?: ApiPoint | null
 }
 
-export function MapView({ quest, points, currentPoint }: MapViewProps) {
-	const [currentLocation, setCurrentLocation] = useState<string | null>(null)
+function getQuestCoordinates(quest: ApiQuest): [number, number] {
+	const latitude = quest.location?.latitude
+	const longitude = quest.location?.longitude
 
-	const displayedPoints = points ?? quest.points
+	if (
+		typeof latitude === 'number' &&
+		typeof longitude === 'number' &&
+		Number.isFinite(latitude) &&
+		Number.isFinite(longitude)
+	) {
+		return [latitude, longitude]
+	}
 
-	const mapCenter: [number, number] = currentLocation
-		? LOCATIONS[currentLocation].center
-		: currentPoint
-			? [currentPoint.latitude, currentPoint.longitude]
-			: displayedPoints[0]
-				? [displayedPoints[0].latitude, displayedPoints[0].longitude]
-				: LOCATIONS['ryazan'].center
+	return LOCATIONS['ryazan'].center
+}
+
+export function MapView({ quest }: MapViewProps) {
+	const mapCenter = getQuestCoordinates(quest)
+	const locationTitle =
+		quest.location?.city_name || quest.location?.region_name
+			? [quest.location?.city_name, quest.location?.region_name]
+					.filter(Boolean)
+					.join(', ')
+			: 'Место прохождения квеста'
 
 	return (
 		<YMaps
@@ -33,22 +43,19 @@ export function MapView({ quest, points, currentPoint }: MapViewProps) {
 				load: 'package.full'
 			}}
 		>
-			<section className="h-110">
-				{/* Location buttons */}
-				<div className="scrollbar-hide flex flex-nowrap gap-x-2 overflow-x-auto px-3 py-3">
-					{Object.keys(LOCATIONS).map((key) => {
-						const isActive = currentLocation === key
-						return (
-							<Button
-								key={key}
-								onClick={() => setCurrentLocation(key)}
-								variant={isActive ? 'default' : 'outline'}
-								className="shrink-0"
-							>
-								{LOCATIONS[key].name}
-							</Button>
-						)
-					})}
+			<section className="relative h-85 overflow-hidden rounded-xl sm:h-105">
+				<div className="bg-background/95 absolute bottom-4 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-lg border px-4 py-2 shadow-sm backdrop-blur">
+					<div className="flex items-center justify-center gap-2 text-center">
+						<Building2 className="size-4 shrink-0 text-amber-600" />
+						<div className="min-w-0">
+							<p className="truncate text-sm font-semibold">
+								{quest.name}
+							</p>
+							<p className="text-muted-foreground truncate text-xs">
+								{locationTitle}
+							</p>
+						</div>
+					</div>
 				</div>
 
 				<Map
@@ -59,28 +66,20 @@ export function MapView({ quest, points, currentPoint }: MapViewProps) {
 					state={{ center: mapCenter, zoom: 15 }}
 					className="no-ymaps-copyright h-full w-full"
 				>
-					{/* All points with conditional icon */}
-					{displayedPoints.map((point) => {
-						const isCurrent = currentPoint?.id === point.id
-						return (
-							<Placemark
-								key={point.id}
-								geometry={[point.latitude, point.longitude]}
-								properties={{
-									hintContent: point.name
-								}}
-								options={{
-									iconLayout: 'default#image',
-									iconImageHref: isCurrent
-										? '/icon-location-current.svg'
-										: '/icon-location.svg',
-									iconImageSize: isCurrent
-										? [48, 48]
-										: [32, 32]
-								}}
-							/>
-						)
-					})}
+					<Placemark
+						geometry={mapCenter}
+						properties={{
+							hintContent: quest.name,
+							balloonContentHeader: quest.name,
+							balloonContentBody: locationTitle
+						}}
+						options={{
+							iconLayout: 'default#image',
+							iconImageHref: '/icon-location-current.svg',
+							iconImageSize: [48, 48],
+							iconImageOffset: [-24, -48]
+						}}
+					/>
 				</Map>
 			</section>
 		</YMaps>
