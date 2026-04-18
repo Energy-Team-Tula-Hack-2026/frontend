@@ -8,7 +8,6 @@ import {
 	Check,
 	Clock,
 	Headphones,
-	Lock,
 	MapPin,
 	PartyPopper,
 	QrCode,
@@ -75,7 +74,9 @@ export function Quest() {
 	})
 
 	const [isScannerOpen, setIsScannerOpen] = useState(false)
+	const [selectedPointId, setSelectedPointId] = useState<string | null>(null)
 	const [manualCode, setManualCode] = useState('')
+	const [scannerError, setScannerError] = useState<string | null>(null)
 	const [scanState, setScanState] = useState<ScanState>({
 		open: false,
 		type: 'success',
@@ -125,17 +126,34 @@ export function Quest() {
 		return [...quest.points].sort((a, b) => a.priority - b.priority)
 	}, [quest?.points])
 
-	const currentPoint = useMemo(() => {
-		return sortedPoints.find(
+	const availablePoints = useMemo(() => {
+		return sortedPoints.filter(
 			(point) => !progress.completedPointIds.includes(point.id)
 		)
 	}, [sortedPoints, progress.completedPointIds])
+
+	const selectedPoint = useMemo(() => {
+		if (!selectedPointId) return null
+		const point = sortedPoints.find((item) => item.id === selectedPointId)
+		if (!point || progress.completedPointIds.includes(point.id)) return null
+		return point
+	}, [selectedPointId, sortedPoints, progress.completedPointIds])
 
 	const allPointsCompleted =
 		sortedPoints.length > 0 &&
 		sortedPoints.every((point) =>
 			progress.completedPointIds.includes(point.id)
 		)
+
+	useEffect(() => {
+		if (!selectedPointId) return
+		const hasSelectedAvailablePoint = availablePoints.some(
+			(point) => point.id === selectedPointId
+		)
+		if (!hasSelectedAvailablePoint) {
+			setSelectedPointId(null)
+		}
+	}, [availablePoints, selectedPointId])
 
 	if (isLoading || isLoadingUser) {
 		return (
@@ -172,12 +190,14 @@ export function Quest() {
 	const handleScanCode = async (rawCode: string) => {
 		const code = rawCode.trim().toUpperCase()
 		setManualCode('')
+		setScannerError(null)
 
 		if (!code || validatePoint.isPending) {
 			return
 		}
 
 		if (allPointsCompleted) {
+			setIsScannerOpen(false)
 			setScanState({
 				open: true,
 				type: 'success',
@@ -186,36 +206,33 @@ export function Quest() {
 			return
 		}
 
-		if (!currentPoint) {
-			setScanState({
-				open: true,
-				type: 'error',
-				message: 'Все точки уже пройдены.'
-			})
+		const scannedPoint = sortedPoints.find(
+			(point) => point.code.trim().toUpperCase() === code
+		)
+
+		if (!scannedPoint) {
+			setScannerError('QR-код не относится к точкам этого квеста.')
 			return
 		}
 
-		if (currentPoint.code !== code) {
-			setIsScannerOpen(false)
-			setScanState({
-				open: true,
-				type: 'error',
-				message:
-					'Неверный QR-код для текущей точки. Соблюдайте порядок точек.'
-			})
+		if (progress.completedPointIds.includes(scannedPoint.id)) {
+			setScannerError(
+				`Точка "${scannedPoint.name}" уже пройдена. Выберите другой чекпоинт.`
+			)
 			return
 		}
 
 		try {
-			await validatePoint.mutateAsync({ code, point: currentPoint })
+			await validatePoint.mutateAsync({ code, point: scannedPoint })
 
 			const nextCompletedIds = Array.from(
-				new Set([...progress.completedPointIds, currentPoint.id])
+				new Set([...progress.completedPointIds, scannedPoint.id])
 			)
 			const nextQuestCompletedCount = nextCompletedIds.filter((pointId) =>
 				sortedPoints.some((point) => point.id === pointId)
 			).length
 			saveProgress({ completedPointIds: nextCompletedIds })
+			setSelectedPointId(null)
 			setIsScannerOpen(false)
 
 			const isLastPoint = nextQuestCompletedCount >= sortedPoints.length
@@ -225,21 +242,16 @@ export function Quest() {
 				type: 'success',
 				message: isLastPoint
 					? 'Поздравляем! Вы прошли все точки квеста.'
-					: `Точка "${currentPoint.name}" пройдена. Следующая точка уже доступна.`
+					: `Точка "${scannedPoint.name}" пройдена. Можно выбрать любой оставшийся чекпоинт.`
 			})
 			toast.success(
 				isLastPoint
 					? 'Квест завершён'
-					: `Точка "${currentPoint.name}" пройдена`
+					: `Точка "${scannedPoint.name}" пройдена`
 			)
 		} catch (err) {
 			const apiError = normalizeApiError(err, POINT_SCAN_ERROR_MESSAGE)
-			setIsScannerOpen(false)
-			setScanState({
-				open: true,
-				type: 'error',
-				message: apiError.message
-			})
+			setScannerError(apiError.message)
 			toast.error(apiError.message)
 		}
 	}
@@ -297,12 +309,17 @@ export function Quest() {
 							</span>
 						</div>
 						<Progress value={progressPercent} className="h-2" />
-						{currentPoint && (
+						{selectedPoint && (
 							<p className="text-muted-foreground mt-3 text-sm">
-								Текущая точка:{' '}
+								Выбран чекпоинт:{' '}
 								<span className="text-foreground font-medium">
-									{currentPoint.name}
+									{selectedPoint.name}
 								</span>
+							</p>
+						)}
+						{availablePoints.length > 0 && !selectedPoint && (
+							<p className="text-muted-foreground mt-3 text-sm">
+								Можно проходить чекпоинты в любом порядке.
 							</p>
 						)}
 						{allPointsCompleted && (
@@ -327,7 +344,7 @@ export function Quest() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="pt-0">
-							<div className="mx-auto w-full max-w-[860px]">
+							<div className="mx-auto w-full max-w-215">
 								<MapView quest={quest} />
 							</div>
 						</CardContent>
@@ -339,16 +356,20 @@ export function Quest() {
 								Сканирование точек
 							</CardTitle>
 							<CardDescription>
-								Сканируйте QR-коды последовательно по маршруту.
+								Выберите любой непройденный чекпоинт или
+								сканируйте его QR-код сразу.
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-3">
 							<Button
 								className="w-full"
 								size="lg"
-								onClick={() => setIsScannerOpen(true)}
+								onClick={() => {
+									setScannerError(null)
+									setIsScannerOpen(true)
+								}}
 								disabled={
-									!currentPoint ||
+									availablePoints.length === 0 ||
 									allPointsCompleted ||
 									validatePoint.isPending
 								}
@@ -356,9 +377,11 @@ export function Quest() {
 								<QrCode className="mr-2 h-5 w-5" />
 								{validatePoint.isPending
 									? 'Проверяем точку...'
-									: currentPoint
-										? `Сканировать: ${currentPoint.name}`
-										: 'Все точки пройдены'}
+									: selectedPoint
+										? `Сканировать: ${selectedPoint.name}`
+										: availablePoints.length > 0
+											? 'Сканировать'
+											: 'Все точки пройдены'}
 							</Button>
 
 							{allPointsCompleted && (
@@ -405,34 +428,32 @@ export function Quest() {
 									progress.completedPointIds.includes(
 										point.id
 									)
-								const isCurrent = currentPoint?.id === point.id
-								const isLocked = !completed && !isCurrent
+								const isSelected =
+									selectedPoint?.id === point.id
 
 								return (
 									<div
 										key={point.id}
-										className={`rounded-xl border p-3 transition-all ${
+										className={`rounded-t-xl rounded-br-xl rounded-bl-4xl border p-3 transition-all ${
 											completed
 												? 'border-green-200 bg-green-50 shadow-sm dark:border-green-900 dark:bg-green-950/20'
-												: isCurrent
-													? 'border-amber-300 bg-amber-50 shadow-md ring-2 ring-amber-200/70 dark:border-amber-900 dark:bg-amber-950/20 dark:ring-amber-900/50'
-													: 'bg-muted/30 opacity-75'
+												: isSelected
+													? 'border-teal-300 bg-teal-50 shadow-md ring-2 ring-teal-200/70 dark:border-teal-800 dark:bg-teal-950/20 dark:ring-teal-900/50'
+													: 'border-amber-300 bg-amber-50/80 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/20'
 										}`}
 									>
-										<div className="flex items-start gap-2">
+										<div className="flex items-start gap-3">
 											<div
 												className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
 													completed
 														? 'border-green-500 bg-green-500 text-white'
-														: isCurrent
-															? 'border-amber-600 bg-amber-600 text-white'
-															: 'border-muted-foreground/30 text-muted-foreground'
+														: isSelected
+															? 'border-teal-600 bg-teal-600 text-white'
+															: 'border-amber-700 bg-amber-700 text-white'
 												}`}
 											>
 												{completed ? (
 													<Check className="h-3.5 w-3.5" />
-												) : isLocked ? (
-													<Lock className="h-3.5 w-3.5" />
 												) : (
 													index + 1
 												)}
@@ -446,33 +467,76 @@ export function Quest() {
 														variant={
 															completed
 																? 'default'
-																: isCurrent
+																: isSelected
 																	? 'secondary'
 																	: 'outline'
+														}
+														className={
+															completed
+																? 'border-green-600 bg-green-600 text-white'
+																: isSelected
+																	? 'border-teal-200 bg-teal-100 text-teal-800 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-200'
+																	: 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
 														}
 													>
 														{completed
 															? 'Пройдена'
-															: isCurrent
-																? 'Текущая'
-																: 'Закрыта'}
+															: isSelected
+																? 'Выбрана'
+																: 'Доступна'}
 													</Badge>
 												</div>
 												<p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
 													{point.short_description ||
 														point.description}
 												</p>
-												<div className="mt-2 flex flex-wrap items-center gap-2">
+												<div className="mt-3 flex flex-wrap items-center gap-2">
+													{!completed && (
+														<Button
+															type="button"
+															size="sm"
+															variant={
+																isSelected
+																	? 'default'
+																	: 'outline'
+															}
+															className="w-full"
+															onClick={() => {
+																setSelectedPointId(
+																	point.id
+																)
+																setScannerError(
+																	null
+																)
+																setIsScannerOpen(
+																	true
+																)
+															}}
+														>
+															<QrCode className="mr-2 h-4 w-4" />
+															{isSelected
+																? 'Сканировать выбранный'
+																: 'Сканировать чекпоинт'}
+														</Button>
+													)}
 													{point.audio_record_url && (
-														<div className="bg-background/70 flex w-full items-center gap-2 rounded-lg border p-2">
-															<Headphones className="h-4 w-4 shrink-0 text-amber-600" />
+														<div className="bg-background/70 mx-auto flex w-full max-w-[320px] items-center justify-center gap-2 rounded-lg border p-2">
+															<Headphones
+																className={`h-4 w-4 shrink-0 ${
+																	completed
+																		? 'text-green-600'
+																		: isSelected
+																			? 'text-teal-600'
+																			: 'text-amber-700'
+																}`}
+															/>
 															<audio
 																controls
 																preload="none"
 																src={
 																	point.audio_record_url
 																}
-																className="h-8 min-w-0 flex-1"
+																className="h-8 w-full max-w-65 min-w-0"
 															/>
 														</div>
 													)}
@@ -491,18 +555,23 @@ export function Quest() {
 				open={isScannerOpen}
 				onOpenChange={(open) => {
 					setIsScannerOpen(open)
-					if (!open) setManualCode('')
+					if (open) setScannerError(null)
+					if (!open) {
+						setManualCode('')
+						setScannerError(null)
+					}
 				}}
 			>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>Сканирование точки</DialogTitle>
 						<DialogDescription>
-							Сканируйте QR текущей точки или введите код вручную.
+							Сканируйте QR любого непройденного чекпоинта или
+							введите код вручную.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-3">
-						<div className="mx-auto w-full max-w-[280px] overflow-hidden rounded-lg border">
+						<div className="mx-auto w-full max-w-70 overflow-hidden rounded-lg border">
 							<QrScanner
 								onScanSuccess={handleScanCode}
 								onError={() => {}}
@@ -520,9 +589,12 @@ export function Quest() {
 							}}
 						>
 							<Input
-								placeholder={currentPoint?.code || 'Код точки'}
+								placeholder={selectedPoint?.code || 'Код точки'}
 								value={manualCode}
-								onChange={(e) => setManualCode(e.target.value)}
+								onChange={(e) => {
+									setManualCode(e.target.value)
+									if (scannerError) setScannerError(null)
+								}}
 								disabled={validatePoint.isPending}
 							/>
 							<Button
@@ -537,6 +609,11 @@ export function Quest() {
 									: 'Проверить'}
 							</Button>
 						</form>
+						{scannerError && (
+							<div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-200">
+								{scannerError}
+							</div>
+						)}
 					</div>
 				</DialogContent>
 			</Dialog>
@@ -547,22 +624,111 @@ export function Quest() {
 					setScanState((prev) => ({ ...prev, open }))
 				}
 			>
-				<DialogContent className="sm:max-w-md">
-					<DialogHeader>
-						<DialogTitle>
-							{scanState.type === 'success' ? 'Готово' : 'Ошибка'}
-						</DialogTitle>
-						<DialogDescription>
-							{scanState.message}
-						</DialogDescription>
-					</DialogHeader>
-					{allPointsCompleted && scanState.type === 'success' && (
-						<Link href="/profile">
-							<Button className="w-full">
-								Перейти в профиль
+				<DialogContent className="overflow-hidden border-0 p-0 sm:max-w-md">
+					<div
+						className={`border p-6 ${
+							scanState.type === 'success'
+								? 'border-amber-200 bg-amber-50/80 dark:border-amber-900/70 dark:bg-amber-950/20'
+								: 'border-amber-200 bg-amber-50/80 dark:border-amber-900/70 dark:bg-amber-950/20'
+						}`}
+					>
+						<DialogHeader className="items-center text-center">
+							<div
+								className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm ${
+									scanState.type === 'success'
+										? allPointsCompleted
+											? 'border-green-200 bg-green-100 text-green-700 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+											: 'border-teal-200 bg-teal-100 text-teal-700 dark:border-teal-900 dark:bg-teal-950/50 dark:text-teal-300'
+										: 'border-red-200 bg-red-100 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'
+								}`}
+							>
+								{scanState.type === 'success' ? (
+									allPointsCompleted ? (
+										<PartyPopper className="h-6 w-6" />
+									) : (
+										<Check className="h-6 w-6" />
+									)
+								) : (
+									<QrCode className="h-6 w-6" />
+								)}
+							</div>
+							<DialogTitle className="text-xl">
+								{scanState.type === 'success'
+									? allPointsCompleted
+										? 'Квест завершён!'
+										: 'Точка пройдена'
+									: 'Не удалось отметить точку'}
+							</DialogTitle>
+							<DialogDescription className="max-w-sm text-center text-sm leading-relaxed">
+								{scanState.message}
+							</DialogDescription>
+						</DialogHeader>
+
+						{scanState.type === 'success' && (
+							<div className="mt-5 rounded-xl border border-amber-200/70 bg-white/75 p-4 shadow-sm dark:border-amber-900/50 dark:bg-zinc-950/40">
+								<div className="mb-2 flex items-center justify-between text-sm">
+									<span className="font-medium">
+										Прогресс маршрута
+									</span>
+									<span className="text-muted-foreground">
+										{completedCount} / {sortedPoints.length}
+									</span>
+								</div>
+								<Progress
+									value={progressPercent}
+									className="h-2"
+								/>
+								{allPointsCompleted ? (
+									<p className="mt-3 text-sm text-green-700 dark:text-green-300">
+										Все чекпоинты отмечены. Результат уже
+										сохранён в вашем прогрессе.
+									</p>
+								) : (
+									<div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+										<p className="text-muted-foreground">
+											Дальше можно выбрать любую
+											непройденную точку
+										</p>
+										<p className="font-semibold text-amber-900 dark:text-amber-200">
+											Осталось чекпоинтов:{' '}
+											{availablePoints.length}
+										</p>
+									</div>
+								)}
+							</div>
+						)}
+
+						<div className="mt-5 flex flex-col gap-2 sm:flex-row">
+							{allPointsCompleted &&
+								scanState.type === 'success' && (
+									<Link href="/profile" className="flex-1">
+										<Button className="w-full">
+											Перейти в профиль
+										</Button>
+									</Link>
+								)}
+							<Button
+								className="flex-1"
+								variant={
+									scanState.type === 'success'
+										? 'outline'
+										: 'default'
+								}
+								onClick={() =>
+									setScanState((prev) => ({
+										...prev,
+										open: false
+									}))
+								}
+							>
+								{scanState.type === 'success'
+									? allPointsCompleted
+										? 'Остаться здесь'
+										: 'Продолжить маршрут'
+									: 'Понятно'}
 							</Button>
-						</Link>
-					)}
+						</div>
+					</div>
 				</DialogContent>
 			</Dialog>
 		</div>
