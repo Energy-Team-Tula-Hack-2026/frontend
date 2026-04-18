@@ -9,6 +9,7 @@ import {
 	Menu,
 	ScrollText,
 	ShoppingBag,
+	Store,
 	Trophy,
 	User
 } from 'lucide-react'
@@ -26,7 +27,11 @@ import {
 } from '@/shared/components/ui/sheet'
 import { ThemeToggle } from '@/shared/components/theme-toggle'
 import { useUser } from '@/shared/hooks/use-user'
-import { canAccessAdminPanel, isOrganizer } from '@/shared/lib/roles'
+import {
+	canAccessAdminPanel,
+	isOrganizer,
+	PLATFORM_ROLE
+} from '@/shared/lib/roles'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 
 const navLinks = [
@@ -35,6 +40,13 @@ const navLinks = [
 	{ href: '/shop', label: 'Маркет', icon: ShoppingBag },
 	{ href: '/profile', label: 'Профиль', icon: User }
 ]
+
+const SELLER_ROLES: Set<string> = new Set([
+	PLATFORM_ROLE.SELLER_IP,
+	PLATFORM_ROLE.SELLER_ORG,
+	PLATFORM_ROLE.PLATFORM_ADMIN,
+	PLATFORM_ROLE.LEGACY_ADMIN
+])
 
 export function Header() {
 	const { user, authMethod, isLoading, isAuthenticated } = useUser()
@@ -48,10 +60,15 @@ export function Header() {
 	const showNavSkeleton = !isClient || (isAuthenticated && isLoading && !user)
 	const isOrganizationSession = authMethod === 'organization'
 	const organizerOnly = isOrganizationSession || isOrganizer(user?.role)
+	const isSeller = SELLER_ROLES.has(user?.role ?? '')
 	const homeHref = organizerOnly ? '/admin' : '/'
+
 	const visibleNavLinks = organizerOnly
 		? navLinks.filter((link) => link.href === '/profile')
-		: navLinks
+		: isSeller
+			? [...navLinks, { href: '/seller', label: 'Продавец', icon: Store }]
+			: navLinks
+
 	const canSeeAdminPanel =
 		isOrganizationSession || canAccessAdminPanel(user?.role)
 
