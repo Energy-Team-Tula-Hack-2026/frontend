@@ -4,16 +4,35 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
+	AlertCircle,
 	ArrowLeft,
+	Calendar,
 	CheckCircle2,
 	Clock,
 	MapPin,
+	Pencil,
 	QrCode,
-	Sparkles
+	Sparkles,
+	Star,
+	ThumbsUp,
+	Trash2,
+	User
 } from 'lucide-react'
+import { toast } from 'sonner'
 
-import { getQuestById, type QuestDto } from '@/shared/api/quest'
+import {
+	getQuestById,
+	type QuestDto,
+	type QuestFeedbackDto
+} from '@/shared/api/quest'
+import { getMe } from '@/shared/api/user'
+import { TokenManager } from '@/shared/api/auth'
 import { normalizeApiError } from '@/shared/api/errors'
+import {
+	changeQuestFeedback,
+	createQuestFeedback,
+	deleteQuestFeedback
+} from '@/shared/api/feedback'
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import {
@@ -27,16 +46,27 @@ import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle
 } from '@/shared/components/ui/dialog'
 import { Input } from '@/shared/components/ui/input'
+import {
+	Avatar,
+	AvatarFallback,
+	AvatarImage
+} from '@/shared/components/ui/avatar'
+import { Label } from '@/shared/components/ui/label'
+import { Textarea } from '@/shared/components/ui/textarea'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import {
 	detectCraftKind,
 	ENTERPRISE_QR_CODES,
 	getCraftOverview
 } from '@/shared/lib/craft-marketplace'
+import type { User as UserType, UserQuestStatus } from '@/shared/types'
+
+const DEFAULT_AVATAR = '/user.jpg'
 
 function getEntryCodeByQuest(quest: QuestDto): string {
 	const kind = detectCraftKind(`${quest.name} ${quest.description}`)
@@ -46,25 +76,106 @@ function getEntryCodeByQuest(quest: QuestDto): string {
 	)
 }
 
+function formatDate(dateString: string): string {
+	const date = new Date(dateString)
+	return new Intl.DateTimeFormat('ru-RU', {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric'
+	}).format(date)
+}
+
+function renderStars(score: number) {
+	return (
+		<div className="flex items-center gap-0.5">
+			{[1, 2, 3, 4, 5].map((star) => (
+				<Star
+					key={star}
+					className={`h-4 w-4 ${
+						star <= score
+							? 'fill-yellow-400 text-yellow-400'
+							: 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
+					}`}
+				/>
+			))}
+		</div>
+	)
+}
+
+function getQuestStatusInfo(status: UserQuestStatus | null) {
+	if (!status) return null
+
+	switch (status) {
+		case 'REGISTERED':
+			return {
+				icon: <CheckCircle2 className="h-4 w-4" />,
+				text: 'Вы записаны на квест',
+				color: 'text-blue-600 dark:text-blue-400'
+			}
+		case 'IN_PROGRESS':
+			return {
+				icon: <Sparkles className="h-4 w-4" />,
+				text: 'Квест в процессе',
+				color: 'text-green-600 dark:text-green-400'
+			}
+		case 'COMPLETED':
+			return {
+				icon: <CheckCircle2 className="h-4 w-4" />,
+				text: 'Квест пройден',
+				color: 'text-purple-600 dark:text-purple-400'
+			}
+		default:
+			return null
+	}
+}
+
 export default function RouteEnterprisePage() {
 	const params = useParams()
 	const router = useRouter()
 	const id = Array.isArray(params.id) ? params.id[0] : params.id
 
+	const isAuthenticated = TokenManager.isAuthenticated()
+
 	const [quest, setQuest] = useState<QuestDto | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
+	const [user, setUser] = useState<UserType | null>(null)
+	const [isLoadingQuest, setIsLoadingQuest] = useState(true)
+	const [isLoadingUser, setIsLoadingUser] = useState(isAuthenticated)
 	const [error, setError] = useState<string | null>(null)
 
 	const [isScannerOpen, setIsScannerOpen] = useState(false)
 	const [manualCode, setManualCode] = useState('')
 	const [startMessage, setStartMessage] = useState<string | null>(null)
 
+	const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+	const [editingFeedback, setEditingFeedback] =
+		useState<QuestFeedbackDto | null>(null)
+	const [feedbackScore, setFeedbackScore] = useState(5)
+	const [feedbackText, setFeedbackText] = useState('')
+	const [feedbackHoveredStar, setFeedbackHoveredStar] = useState(0)
+	const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
+	const [feedbackError, setFeedbackError] = useState<string | null>(null)
+
+	const reloadData = async () => {
+		if (!id) return
+		try {
+			const [updatedQuest, updatedUser] = await Promise.all([
+				getQuestById(id),
+				isAuthenticated ? getMe() : Promise.resolve(null)
+			])
+			setQuest(updatedQuest)
+			setUser(updatedUser)
+		} catch (err) {
+			console.error('Failed to reload route data', err)
+		}
+	}
+
 	useEffect(() => {
 		if (!id) return
 		let isMounted = true
 
 		const load = async () => {
-			setIsLoading(true)
+			setIsLoadingQuest(true)
 			setError(null)
 			try {
 				const data = await getQuestById(id)
@@ -79,15 +190,40 @@ export default function RouteEnterprisePage() {
 				setError(apiError.message)
 				setQuest(null)
 			} finally {
-				if (isMounted) setIsLoading(false)
+				if (isMounted) setIsLoadingQuest(false)
+			}
+		}
+
+		const loadUser = async () => {
+			if (!isAuthenticated) {
+				if (isMounted) {
+					setUser(null)
+					setIsLoadingUser(false)
+				}
+				return
+			}
+			setIsLoadingUser(true)
+			try {
+				const me = await getMe()
+				if (!isMounted) return
+				setUser(me)
+			} catch {
+				if (!isMounted) return
+				setUser(null)
+			} finally {
+				if (isMounted) setIsLoadingUser(false)
 			}
 		}
 
 		load()
+		loadUser()
+
 		return () => {
 			isMounted = false
 		}
-	}, [id])
+	}, [id, isAuthenticated])
+
+	const isLoading = isLoadingQuest || isLoadingUser
 
 	const craftOverview = useMemo(() => {
 		if (!quest) return null
@@ -98,6 +234,31 @@ export default function RouteEnterprisePage() {
 	const expectedCode = useMemo(
 		() => (quest ? getEntryCodeByQuest(quest) : ''),
 		[quest]
+	)
+
+	const userQuestStatus = useMemo(() => {
+		if (!id || !user?.quests?.length) return null
+		return user.quests.find((item) => item.quest_id === id)?.status || null
+	}, [id, user])
+
+	const canLeaveFeedback = useMemo(
+		() =>
+			userQuestStatus === 'IN_PROGRESS' ||
+			userQuestStatus === 'COMPLETED',
+		[userQuestStatus]
+	)
+
+	const userFeedback = useMemo(() => {
+		if (!user?.id || !quest?.feedbacks?.length) return null
+		return (
+			quest.feedbacks.find((feedback) => feedback.user_id === user.id) ??
+			null
+		)
+	}, [user, quest])
+
+	const questStatusInfo = useMemo(
+		() => getQuestStatusInfo(userQuestStatus),
+		[userQuestStatus]
 	)
 
 	const handleStartByCode = (rawCode: string) => {
@@ -116,6 +277,111 @@ export default function RouteEnterprisePage() {
 		setTimeout(() => {
 			router.push(`/quest/${quest.id}`)
 		}, 500)
+	}
+
+	const redirectToLogin = () => {
+		const nextUrl =
+			typeof window !== 'undefined'
+				? `/login?next=${encodeURIComponent(window.location.pathname)}`
+				: '/login'
+		router.push(nextUrl)
+	}
+
+	const handleOpenCreateFeedback = () => {
+		if (!isAuthenticated) {
+			toast.error('Для оставления отзыва нужно войти в аккаунт')
+			redirectToLogin()
+			return
+		}
+
+		if (!canLeaveFeedback) {
+			toast.info('Начните проходить квест, чтобы оставить отзыв')
+			return
+		}
+
+		setEditingFeedback(null)
+		setFeedbackScore(5)
+		setFeedbackText('')
+		setFeedbackError(null)
+		setFeedbackDialogOpen(true)
+	}
+
+	const handleOpenEditFeedback = (feedback: QuestFeedbackDto) => {
+		setEditingFeedback(feedback)
+		setFeedbackScore(feedback.score)
+		setFeedbackText(feedback.text || '')
+		setFeedbackError(null)
+		setFeedbackDialogOpen(true)
+	}
+
+	const handleOpenDeleteDialog = (feedback: QuestFeedbackDto) => {
+		setEditingFeedback(feedback)
+		setDeleteDialogOpen(true)
+	}
+
+	const validateFeedback = () => {
+		if (!feedbackText.trim()) {
+			setFeedbackError('Пожалуйста, напишите текст отзыва')
+			return false
+		}
+		if (feedbackScore === 0) {
+			setFeedbackError('Пожалуйста, поставьте оценку')
+			return false
+		}
+		return true
+	}
+
+	const handleSubmitFeedback = async () => {
+		if (!quest) return
+		if (!validateFeedback()) return
+
+		setIsSubmittingFeedback(true)
+		try {
+			if (editingFeedback) {
+				await changeQuestFeedback(editingFeedback.id, {
+					score: feedbackScore,
+					text: feedbackText.trim()
+				})
+				toast.success('Отзыв успешно обновлен')
+			} else {
+				await createQuestFeedback(quest.id, {
+					score: feedbackScore,
+					text: feedbackText.trim()
+				})
+				toast.success('Отзыв успешно создан')
+			}
+
+			await reloadData()
+			setFeedbackDialogOpen(false)
+			setEditingFeedback(null)
+			setFeedbackError(null)
+		} catch (err) {
+			const apiError = normalizeApiError(
+				err,
+				'Не удалось сохранить отзыв'
+			)
+			setFeedbackError(apiError.message)
+			toast.error(apiError.message)
+		} finally {
+			setIsSubmittingFeedback(false)
+		}
+	}
+
+	const handleDeleteFeedback = async () => {
+		if (!editingFeedback) return
+		setIsSubmittingFeedback(true)
+		try {
+			await deleteQuestFeedback(editingFeedback.id)
+			toast.success('Отзыв успешно удален')
+			await reloadData()
+			setDeleteDialogOpen(false)
+			setEditingFeedback(null)
+		} catch (err) {
+			const apiError = normalizeApiError(err, 'Не удалось удалить отзыв')
+			toast.error(apiError.message)
+		} finally {
+			setIsSubmittingFeedback(false)
+		}
 	}
 
 	if (isLoading) {
@@ -242,6 +508,169 @@ export default function RouteEnterprisePage() {
 				</Card>
 			</section>
 
+			<section className="space-y-4">
+				<div className="flex items-center justify-between gap-3">
+					<h2 className="text-xl font-semibold">Отзывы</h2>
+					<Badge variant="outline">
+						{quest.feedbacks?.length ?? 0}
+					</Badge>
+				</div>
+
+				{isAuthenticated && !userFeedback && (
+					<Card className="border-dashed border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
+						<CardContent className="p-6 text-center">
+							{questStatusInfo && (
+								<div className="mb-3 flex items-center justify-center gap-2 text-sm">
+									<span className={questStatusInfo.color}>
+										{questStatusInfo.icon}
+									</span>
+									<span className={questStatusInfo.color}>
+										{questStatusInfo.text}
+									</span>
+								</div>
+							)}
+							{canLeaveFeedback ? (
+								<>
+									<p className="text-muted-foreground mb-3">
+										Поделитесь впечатлениями о квесте
+									</p>
+									<Button
+										onClick={handleOpenCreateFeedback}
+										variant="outline"
+										className="border-blue-300 bg-white hover:bg-blue-50 dark:border-blue-700 dark:bg-blue-950/50 dark:hover:bg-blue-950"
+									>
+										<Star className="mr-2 h-4 w-4" />
+										Оставить отзыв
+									</Button>
+								</>
+							) : (
+								<p className="text-muted-foreground">
+									Начните проходить квест, чтобы оставить
+									отзыв
+								</p>
+							)}
+						</CardContent>
+					</Card>
+				)}
+
+				{!quest.feedbacks?.length ? (
+					<Card>
+						<CardContent className="py-12 text-center">
+							<ThumbsUp className="text-muted-foreground mx-auto mb-3 h-12 w-12" />
+							<h3 className="text-foreground mb-2 text-lg font-semibold">
+								Пока нет отзывов
+							</h3>
+							<p className="text-muted-foreground">
+								Будьте первым, кто оставит отзыв о квесте
+							</p>
+						</CardContent>
+					</Card>
+				) : (
+					<div className="space-y-4">
+						{quest.feedbacks.map((review) => {
+							const isOwnReview = Boolean(
+								user?.id && user.id === review.user_id
+							)
+							return (
+								<Card
+									key={review.id}
+									className="overflow-hidden"
+								>
+									<CardContent className="p-6">
+										<div className="flex flex-col space-y-3">
+											<div className="flex items-start justify-between">
+												<div className="flex items-center space-x-3">
+													<Avatar className="h-10 w-10">
+														<AvatarImage
+															src={
+																review.user
+																	?.avatar_url ||
+																DEFAULT_AVATAR
+															}
+															alt={`${review.user?.name ?? ''} ${review.user?.surname ?? ''}`}
+														/>
+														<AvatarFallback>
+															<User className="h-5 w-5" />
+														</AvatarFallback>
+													</Avatar>
+													<div>
+														<div className="flex items-center gap-2">
+															<p className="text-foreground font-semibold">
+																{review.user
+																	? `${review.user.name} ${review.user.surname}`
+																	: 'Пользователь'}
+															</p>
+															{isOwnReview && (
+																<Badge
+																	variant="outline"
+																	className="text-xs"
+																>
+																	Ваш отзыв
+																</Badge>
+															)}
+														</div>
+														<div className="mt-1">
+															{renderStars(
+																review.score
+															)}
+														</div>
+													</div>
+												</div>
+
+												<div className="flex items-center gap-1">
+													<div className="text-muted-foreground flex items-center space-x-1 text-xs">
+														<Calendar className="h-3 w-3" />
+														<span>
+															{formatDate(
+																review.created_at
+															)}
+														</span>
+													</div>
+													{isOwnReview && (
+														<>
+															<Button
+																variant="ghost"
+																size="icon"
+																className="h-8 w-8"
+																onClick={() =>
+																	handleOpenEditFeedback(
+																		review
+																	)
+																}
+															>
+																<Pencil className="h-4 w-4" />
+															</Button>
+															<Button
+																variant="ghost"
+																size="icon"
+																className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+																onClick={() =>
+																	handleOpenDeleteDialog(
+																		review
+																	)
+																}
+															>
+																<Trash2 className="h-4 w-4" />
+															</Button>
+														</>
+													)}
+												</div>
+											</div>
+
+											{review.text && (
+												<p className="text-muted-foreground leading-relaxed">
+													{review.text}
+												</p>
+											)}
+										</div>
+									</CardContent>
+								</Card>
+							)
+						})}
+					</div>
+				)}
+			</section>
+
 			<Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
@@ -273,6 +702,146 @@ export default function RouteEnterprisePage() {
 							</Button>
 						</div>
 					</div>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				open={feedbackDialogOpen}
+				onOpenChange={(open) => {
+					setFeedbackDialogOpen(open)
+					if (!open) {
+						setEditingFeedback(null)
+						setFeedbackError(null)
+					}
+				}}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>
+							{editingFeedback
+								? 'Редактировать отзыв'
+								: 'Оставить отзыв'}
+						</DialogTitle>
+						<DialogDescription>
+							{editingFeedback
+								? `Измените свою оценку или комментарий к квесту "${quest.name}"`
+								: `Поделитесь впечатлениями о квесте "${quest.name}"`}
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-6 py-4">
+						<div className="space-y-3">
+							<Label>Ваша оценка</Label>
+							<div className="flex items-center gap-1">
+								{[1, 2, 3, 4, 5].map((star) => (
+									<button
+										key={star}
+										type="button"
+										onClick={() => {
+											setFeedbackScore(star)
+											if (feedbackError)
+												setFeedbackError(null)
+										}}
+										onMouseEnter={() =>
+											setFeedbackHoveredStar(star)
+										}
+										onMouseLeave={() =>
+											setFeedbackHoveredStar(0)
+										}
+										className="focus:outline-none"
+									>
+										<Star
+											className={`h-8 w-8 transition-all ${
+												star <=
+												(feedbackHoveredStar ||
+													feedbackScore)
+													? 'fill-yellow-400 text-yellow-400'
+													: 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
+											}`}
+										/>
+									</button>
+								))}
+							</div>
+						</div>
+
+						<div className="space-y-3">
+							<Label htmlFor="feedback-text">
+								Ваш комментарий{' '}
+								<span className="text-red-500">*</span>
+							</Label>
+							<Textarea
+								id="feedback-text"
+								placeholder="Расскажите, что вам понравилось или что можно улучшить..."
+								value={feedbackText}
+								onChange={(e) => {
+									setFeedbackText(e.target.value)
+									if (feedbackError) setFeedbackError(null)
+								}}
+								rows={4}
+								className={`resize-none ${feedbackError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+							/>
+							{feedbackError && (
+								<div className="flex items-center gap-2 text-sm text-red-500">
+									<AlertCircle className="h-4 w-4" />
+									<span>{feedbackError}</span>
+								</div>
+							)}
+						</div>
+					</div>
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setFeedbackDialogOpen(false)
+								setFeedbackError(null)
+							}}
+							disabled={isSubmittingFeedback}
+						>
+							Отмена
+						</Button>
+						<Button
+							onClick={handleSubmitFeedback}
+							disabled={isSubmittingFeedback}
+							className="bg-gradient-to-r from-blue-500 to-purple-600"
+						>
+							{isSubmittingFeedback
+								? editingFeedback
+									? 'Сохранение...'
+									: 'Создание...'
+								: editingFeedback
+									? 'Сохранить изменения'
+									: 'Оставить отзыв'}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Удалить отзыв?</DialogTitle>
+						<DialogDescription>
+							Вы уверены, что хотите удалить свой отзыв? Это
+							действие нельзя отменить.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter className="gap-2">
+						<Button
+							variant="outline"
+							onClick={() => setDeleteDialogOpen(false)}
+							disabled={isSubmittingFeedback}
+						>
+							Отмена
+						</Button>
+						<Button
+							variant="destructive"
+							onClick={handleDeleteFeedback}
+							disabled={isSubmittingFeedback}
+						>
+							{isSubmittingFeedback ? 'Удаление...' : 'Удалить'}
+						</Button>
+					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 		</div>

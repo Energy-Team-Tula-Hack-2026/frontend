@@ -6,8 +6,8 @@ const API_PREFIX = '/api/v2'
 export type QuestCategory = {
 	id: string
 	name: string
-	created_at: string
-	updated_at: string
+	created_at?: string
+	updated_at?: string
 }
 
 export type QuestPointDto = {
@@ -65,18 +65,28 @@ export type QuestDto = {
 	id: string
 	name: string
 	description: string
-	category_id: string
-	price_rub: number
-	length_metres: number
+	code?: string
+	category_id?: string
+	price_rub?: number
+	length_metres?: number
 	duration_min: number
 	level: 'EASY' | 'MEDIUM' | 'HARD'
-	category: QuestCategory
+	rating?: number | null
+	category?: QuestCategory | null
+	location?: {
+		city_id?: string
+		city_name?: string
+		region_id?: string
+		region_name?: string
+		latitude?: number
+		longitude?: number
+	} | null
 	points: QuestPointDto[]
 	images: QuestImageDto[]
 	quest_planning: QuestPlanningDto | null
 	feedbacks: QuestFeedbackDto[]
-	created_at: string
-	updated_at: string
+	created_at?: string
+	updated_at?: string
 }
 
 export async function getQuestCategories(): Promise<QuestCategory[]> {

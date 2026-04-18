@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -15,7 +15,6 @@ import {
 	CardTitle
 } from '@/shared/components/ui/card'
 import { Input } from '@/shared/components/ui/input'
-import { Skeleton } from '@/shared/components/ui/skeleton'
 import {
 	Dialog,
 	DialogContent,
@@ -31,28 +30,16 @@ import {
 	SelectValue
 } from '@/shared/components/ui/select'
 
-import {
-	getQuestCategories,
-	getQuests,
-	QuestCategory,
-	QuestDto
-} from '@/shared/api/quest'
+import { getQuests, QuestDto } from '@/shared/api/quest'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import {
+	CRAFT_ENTERPRISES,
 	CRAFT_PRODUCTS,
 	ENTERPRISE_QR_CODES
 } from '@/shared/lib/craft-marketplace'
-import {
-	Carousel,
-	CarouselContent,
-	CarouselItem,
-	CarouselNext,
-	CarouselPrevious
-} from '@/shared/components/ui/carousel'
 
 export default function HomePage() {
 	const [quests, setQuests] = useState<QuestDto[]>([])
-	const [questCategories, setQuestCategories] = useState<QuestCategory[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
 	const [questsError, setQuestsError] = useState<string | null>(null)
 
@@ -62,7 +49,6 @@ export default function HomePage() {
 
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
-	const [enterpriseCategory, setEnterpriseCategory] = useState<string>('all')
 
 	const [productSearch, setProductSearch] = useState('')
 	const [productCategory, setProductCategory] = useState<string>('all')
@@ -75,13 +61,9 @@ export default function HomePage() {
 			setIsLoadingQuests(true)
 			setQuestsError(null)
 			try {
-				const [questsData, categoriesData] = await Promise.all([
-					getQuests(),
-					getQuestCategories()
-				])
+				const data = await getQuests()
 				if (!isMounted) return
-				setQuests(questsData)
-				setQuestCategories(categoriesData)
+				setQuests(data)
 			} catch (error) {
 				if (!isMounted) return
 				const apiError = normalizeApiError(
@@ -90,7 +72,6 @@ export default function HomePage() {
 				)
 				setQuestsError(apiError.message)
 				setQuests([])
-				setQuestCategories([])
 			} finally {
 				if (isMounted) setIsLoadingQuests(false)
 			}
@@ -102,29 +83,34 @@ export default function HomePage() {
 		}
 	}, [])
 
-	const filteredQuests = useMemo(() => {
-		return quests.filter((quest) => {
+	const enterpriseQuestLinks = useMemo(() => {
+		const firstThreeQuestIds = quests.slice(0, 3).map((item) => item.id)
+		return CRAFT_ENTERPRISES.map((item, index) => ({
+			...item,
+			questId: firstThreeQuestIds[index] ?? null
+		}))
+	}, [quests])
+
+	const filteredEnterprises = useMemo(() => {
+		return enterpriseQuestLinks.filter((enterprise) => {
 			const matchesSearch =
-				quest.name
+				enterprise.title
 					.toLowerCase()
 					.includes(enterpriseSearch.toLowerCase()) ||
-				quest.description
+				enterprise.description
 					.toLowerCase()
 					.includes(enterpriseSearch.toLowerCase())
 
 			const matchesLevel =
 				enterpriseLevel === 'all' ||
-				(enterpriseLevel === 'basic' && quest.level === 'EASY') ||
-				(enterpriseLevel === 'medium' && quest.level === 'MEDIUM')
+				(enterpriseLevel === 'basic' &&
+					enterprise.level.toLowerCase() === 'базовый') ||
+				(enterpriseLevel === 'medium' &&
+					enterprise.level.toLowerCase() === 'средний')
 
-			const matchesCategory =
-				enterpriseCategory === 'all' ||
-				quest.category?.id === enterpriseCategory ||
-				quest.category_id === enterpriseCategory
-
-			return matchesSearch && matchesLevel && matchesCategory
+			return matchesSearch && matchesLevel
 		})
-	}, [quests, enterpriseSearch, enterpriseLevel, enterpriseCategory])
+	}, [enterpriseQuestLinks, enterpriseSearch, enterpriseLevel])
 
 	const filteredProducts = useMemo(() => {
 		return CRAFT_PRODUCTS.filter((product) => {
@@ -209,11 +195,13 @@ export default function HomePage() {
 					<h2 className="text-2xl font-semibold">
 						Ремесленные предприятия
 					</h2>
-					<Badge variant="outline">{filteredQuests.length}</Badge>
+					<Badge variant="outline">
+						{filteredEnterprises.length}
+					</Badge>
 				</div>
 
 				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-4">
+					<CardContent className="grid gap-3 p-4 md:grid-cols-3">
 						<div className="relative md:col-span-2">
 							<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 							<Input
@@ -240,104 +228,16 @@ export default function HomePage() {
 								<SelectItem value="medium">Средний</SelectItem>
 							</SelectContent>
 						</Select>
-						<Select
-							value={enterpriseCategory}
-							onValueChange={setEnterpriseCategory}
-						>
-							<SelectTrigger>
-								<SelectValue placeholder="Категория" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">
-									Все категории
-								</SelectItem>
-								{questCategories.map((category) => (
-									<SelectItem
-										key={category.id}
-										value={category.id}
-									>
-										{category.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
 					</CardContent>
 				</Card>
 
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-					{isLoadingQuests &&
-						Array.from({ length: 3 }).map((_, index) => (
-							<Card key={`home-quest-skeleton-${index}`}>
-								<Skeleton className="h-40 w-full rounded-t-xl rounded-b-none" />
-								<CardHeader className="space-y-2">
-									<Skeleton className="h-5 w-2/3" />
-									<Skeleton className="h-4 w-full" />
-									<Skeleton className="h-4 w-4/5" />
-								</CardHeader>
-								<CardContent className="space-y-3">
-									<Skeleton className="h-4 w-full" />
-									<Skeleton className="h-4 w-full" />
-									<Skeleton className="h-9 w-24" />
-								</CardContent>
-							</Card>
-						))}
-					{filteredQuests.map((quest) => (
-						<Card
-							key={quest.id}
-							className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
-						>
-							{(() => {
-								const images = [
-									...(quest.images
-										?.map((image) => image.image_url)
-										.filter((url): url is string =>
-											Boolean(url)
-										) ?? []),
-									...(quest.points
-										?.map((point) => point.image_url)
-										.filter((url): url is string =>
-											Boolean(url)
-										) ?? [])
-								]
-								const uniqueImages = Array.from(new Set(images))
-								const finalImages =
-									uniqueImages.length > 0
-										? uniqueImages
-										: ['/placeholder-logo.png']
-
-								return (
-									<div className="relative overflow-hidden rounded-t-xl border-b">
-										<Carousel className="w-full">
-											<CarouselContent className="-ml-0">
-												{finalImages.map(
-													(imageUrl, index) => (
-														<CarouselItem
-															key={`${quest.id}-${imageUrl}-${index}`}
-															className="pl-0"
-														>
-															<img
-																src={imageUrl}
-																alt={`${quest.name} — изображение ${index + 1}`}
-																className="h-40 w-full object-cover"
-															/>
-														</CarouselItem>
-													)
-												)}
-											</CarouselContent>
-											{finalImages.length > 1 && (
-												<>
-													<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
-													<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
-												</>
-											)}
-										</Carousel>
-									</div>
-								)
-							})()}
+					{filteredEnterprises.map((enterprise) => (
+						<Card key={enterprise.id}>
 							<CardHeader>
-								<CardTitle>{quest.name}</CardTitle>
+								<CardTitle>{enterprise.title}</CardTitle>
 								<CardDescription>
-									{quest.description}
+									{enterprise.description}
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-2 text-sm">
@@ -346,16 +246,7 @@ export default function HomePage() {
 										Уровень
 									</span>
 									<span className="font-medium">
-										{quest.level}
-									</span>
-								</div>
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">
-										Категория
-									</span>
-									<span className="font-medium">
-										{quest.category?.name ??
-											'Без категории'}
+										{enterprise.level}
 									</span>
 								</div>
 								<div className="flex items-center justify-between">
@@ -363,11 +254,15 @@ export default function HomePage() {
 										Время
 									</span>
 									<span className="font-medium">
-										{quest.duration_min ?? 0} минут
+										{enterprise.duration}
 									</span>
 								</div>
 								<Link
-									href={`/routes/${quest.id}`}
+									href={
+										enterprise.questId
+											? `/routes/${enterprise.questId}`
+											: '/crafts'
+									}
 									className="inline-flex pt-2"
 								>
 									<Button variant="outline" size="sm">
@@ -379,6 +274,11 @@ export default function HomePage() {
 					))}
 				</div>
 
+				{isLoadingQuests && (
+					<p className="text-muted-foreground text-sm">
+						Загружаем связку с квестами…
+					</p>
+				)}
 				{questsError && (
 					<p className="text-destructive text-sm">{questsError}</p>
 				)}
@@ -397,7 +297,7 @@ export default function HomePage() {
 				</div>
 
 				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-5">
+					<CardContent className="grid gap-3 p-4 md:grid-cols-4">
 						<div className="relative md:col-span-2">
 							<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 							<Input
@@ -413,7 +313,7 @@ export default function HomePage() {
 							value={productCategory}
 							onValueChange={setProductCategory}
 						>
-							<SelectTrigger className="w-full">
+							<SelectTrigger>
 								<SelectValue placeholder="Категория" />
 							</SelectTrigger>
 							<SelectContent>
@@ -428,62 +328,54 @@ export default function HomePage() {
 								<SelectItem value="Посуда">Посуда</SelectItem>
 							</SelectContent>
 						</Select>
-						<div className="md:col-span-2">
-							<Select
-								value={productSeller}
-								onValueChange={setProductSeller}
-							>
-								<SelectTrigger className="w-full min-w-0">
-									<SelectValue placeholder="Продавец" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">
-										Все продавцы
-									</SelectItem>
-									<SelectItem value="organization">
-										Организации
-									</SelectItem>
-									<SelectItem value="user">
-										Пользователи
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
+						<Select
+							value={productSeller}
+							onValueChange={setProductSeller}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Продавец" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									Все продавцы
+								</SelectItem>
+								<SelectItem value="organization">
+									Организации
+								</SelectItem>
+								<SelectItem value="user">
+									Пользователи
+								</SelectItem>
+							</SelectContent>
+						</Select>
 					</CardContent>
 				</Card>
 
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
 					{featuredProducts.map((product) => (
-						<Card
-							key={product.id}
-							className="group h-full overflow-hidden border-amber-100/80 bg-white/90 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900/70"
-						>
+						<Card key={product.id} className="overflow-hidden">
 							<img
 								src={
 									product.images[0] || '/placeholder-logo.png'
 								}
 								alt={product.title}
-								className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+								className="h-36 w-full object-cover"
 							/>
-							<CardContent className="flex h-[225px] flex-col gap-2 p-4">
+							<CardContent className="space-y-2 p-4">
 								<p className="line-clamp-1 font-semibold">
 									{product.title}
 								</p>
-								<p className="text-muted-foreground line-clamp-3 text-sm">
+								<p className="text-muted-foreground line-clamp-2 text-sm">
 									{product.description}
 								</p>
-								<div className="mt-1 flex items-center justify-between">
+								<div className="flex items-center justify-between">
 									<Badge variant="secondary">
 										{product.category}
 									</Badge>
-									<span className="text-base font-semibold">
+									<span className="font-semibold">
 										{product.priceRub} ₽
 									</span>
 								</div>
-								<Link
-									href={`/shop/${product.id}`}
-									className="mt-auto"
-								>
+								<Link href={`/shop/${product.id}`}>
 									<Button size="sm" className="w-full">
 										Открыть товар
 									</Button>

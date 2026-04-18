@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
 	ArrowRight,
@@ -18,36 +18,33 @@ import {
 	CardHeader,
 	CardTitle
 } from '@/shared/components/ui/card'
-import { Spinner } from '@/shared/components/ui/spinner'
-import { getQuests, type QuestDto } from '@/shared/api/quest'
+import { Skeleton } from '@/shared/components/ui/skeleton'
+import {
+	Carousel,
+	CarouselContent,
+	CarouselItem,
+	CarouselNext,
+	CarouselPrevious
+} from '@/shared/components/ui/carousel'
+import {
+	getQuestCategories,
+	getQuests,
+	type QuestCategory,
+	type QuestDto
+} from '@/shared/api/quest'
 import { normalizeApiError } from '@/shared/api/errors'
-
-const craftCards = [
-	{
-		title: 'Гончарное дело',
-		description:
-			'Изучите основы работы с глиной и пройдите точки-квесты в мастерских региона.',
-		level: 'Базовый',
-		duration: '45 минут'
-	},
-	{
-		title: 'Резьба по дереву',
-		description:
-			'Соберите мини-маршрут по ремесленным пространствам и получите баллы за этапы.',
-		level: 'Средний',
-		duration: '60 минут'
-	},
-	{
-		title: 'Текстиль и вышивка',
-		description:
-			'История узоров, практические задания и цифровая карточка ваших достижений.',
-		level: 'Базовый',
-		duration: '35 минут'
-	}
-]
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
+} from '@/shared/components/ui/select'
 
 export default function CraftsPage() {
 	const [quests, setQuests] = useState<QuestDto[]>([])
+	const [questCategories, setQuestCategories] = useState<QuestCategory[]>([])
+	const [selectedCategoryId, setSelectedCategoryId] = useState('all')
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
 	const [questsError, setQuestsError] = useState<string | null>(null)
 
@@ -58,9 +55,13 @@ export default function CraftsPage() {
 			setIsLoadingQuests(true)
 			setQuestsError(null)
 			try {
-				const data = await getQuests()
+				const [questsData, categoriesData] = await Promise.all([
+					getQuests(),
+					getQuestCategories()
+				])
 				if (!isMounted) return
-				setQuests(data)
+				setQuests(questsData)
+				setQuestCategories(categoriesData)
 			} catch (error) {
 				if (!isMounted) return
 				const apiError = normalizeApiError(
@@ -69,6 +70,7 @@ export default function CraftsPage() {
 				)
 				setQuestsError(apiError.message)
 				setQuests([])
+				setQuestCategories([])
 			} finally {
 				if (isMounted) setIsLoadingQuests(false)
 			}
@@ -79,6 +81,15 @@ export default function CraftsPage() {
 			isMounted = false
 		}
 	}, [])
+
+	const filteredQuests = useMemo(() => {
+		if (selectedCategoryId === 'all') return quests
+		return quests.filter(
+			(quest) =>
+				quest.category?.id === selectedCategoryId ||
+				quest.category_id === selectedCategoryId
+		)
+	}, [quests, selectedCategoryId])
 
 	return (
 		<div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
@@ -115,116 +126,194 @@ export default function CraftsPage() {
 				</div>
 			</section>
 
-			<section className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-				{isLoadingQuests && (
-					<Card className="md:col-span-3">
-						<CardContent className="flex items-center justify-center gap-2 p-6 text-sm">
-							<Spinner className="size-4" />
-							<span>Загружаем квесты...</span>
-						</CardContent>
-					</Card>
-				)}
-				{questsError && !isLoadingQuests && (
-					<Card className="border-destructive/30 md:col-span-3">
-						<CardContent className="p-6">
-							<p className="text-destructive text-sm">
-								{questsError}
+			<section className="mt-8 space-y-4">
+				<Card>
+					<CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_260px]">
+						<div>
+							<p className="text-muted-foreground text-sm">
+								Фильтр квестов по категории
 							</p>
-						</CardContent>
-					</Card>
-				)}
-				{!isLoadingQuests && !questsError && quests.length > 0
-					? quests.map((quest) => (
+						</div>
+						<Select
+							value={selectedCategoryId}
+							onValueChange={setSelectedCategoryId}
+						>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="Категория" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">
+									Все категории
+								</SelectItem>
+								{questCategories.map((category) => (
+									<SelectItem
+										key={category.id}
+										value={category.id}
+									>
+										{category.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</CardContent>
+				</Card>
+
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+					{isLoadingQuests &&
+						Array.from({ length: 3 }).map((_, index) => (
 							<Card
-								key={quest.id}
-								className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
+								key={`quest-skeleton-${index}`}
+								className="md:col-span-1"
 							>
-								<CardHeader>
-									<CardTitle>{quest.name}</CardTitle>
-									<CardDescription>
-										{quest.description}
-									</CardDescription>
+								<Skeleton className="h-44 w-full rounded-t-xl rounded-b-none" />
+								<CardHeader className="space-y-2">
+									<Skeleton className="h-5 w-2/3" />
+									<Skeleton className="h-4 w-full" />
+									<Skeleton className="h-4 w-4/5" />
 								</CardHeader>
 								<CardContent className="space-y-3">
-									<div className="flex items-center justify-between text-sm">
-										<span className="text-muted-foreground">
-											Уровень
-										</span>
-										<span className="font-medium">
-											{quest.level}
-										</span>
-									</div>
-									<div className="flex items-center justify-between text-sm">
-										<span className="text-muted-foreground">
-											Время
-										</span>
-										<span className="font-medium">
-											{quest.duration_min ?? 0} минут
-										</span>
-									</div>
-									<Link
-										href={`/routes/${quest.id}`}
-										className="block"
-									>
-										<Button
-											variant="ghost"
-											className="w-full justify-between"
-										>
-											Подробнее
-											<ArrowRight className="h-4 w-4" />
-										</Button>
-									</Link>
+									<Skeleton className="h-4 w-full" />
+									<Skeleton className="h-4 w-full" />
+									<Skeleton className="h-9 w-full" />
 								</CardContent>
 							</Card>
-						))
-					: null}
-				{!isLoadingQuests && !questsError && quests.length === 0 && (
-					<Card className="md:col-span-3">
-						<CardContent className="p-6">
-							<p className="text-muted-foreground text-sm">
-								Пока нет доступных квестов.
-							</p>
-						</CardContent>
-					</Card>
-				)}
-				{craftCards.map((card) => (
-					<Card
-						key={card.title}
-						className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
-					>
-						<CardHeader>
-							<CardTitle>{card.title}</CardTitle>
-							<CardDescription>
-								{card.description}
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-3">
-							<div className="flex items-center justify-between text-sm">
-								<span className="text-muted-foreground">
-									Уровень
-								</span>
-								<span className="font-medium">
-									{card.level}
-								</span>
-							</div>
-							<div className="flex items-center justify-between text-sm">
-								<span className="text-muted-foreground">
-									Время
-								</span>
-								<span className="font-medium">
-									{card.duration}
-								</span>
-							</div>
-							<Button
-								variant="ghost"
-								className="w-full justify-between"
-							>
-								Подробнее
-								<ArrowRight className="h-4 w-4" />
-							</Button>
-						</CardContent>
-					</Card>
-				))}
+						))}
+					{questsError && !isLoadingQuests && (
+						<Card className="border-destructive/30 md:col-span-3">
+							<CardContent className="p-6">
+								<p className="text-destructive text-sm">
+									{questsError}
+								</p>
+							</CardContent>
+						</Card>
+					)}
+					{!isLoadingQuests &&
+					!questsError &&
+					filteredQuests.length > 0
+						? filteredQuests.map((quest) => (
+								<Card
+									key={quest.id}
+									className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
+								>
+									{(() => {
+										const images = [
+											...(quest.images
+												?.map(
+													(image) => image.image_url
+												)
+												.filter((url): url is string =>
+													Boolean(url)
+												) ?? []),
+											...(quest.points
+												?.map(
+													(point) => point.image_url
+												)
+												.filter((url): url is string =>
+													Boolean(url)
+												) ?? [])
+										]
+										const uniqueImages = Array.from(
+											new Set(images)
+										)
+										const finalImages =
+											uniqueImages.length > 0
+												? uniqueImages
+												: ['/placeholder-logo.png']
+
+										return (
+											<div className="relative overflow-hidden rounded-t-xl border-b">
+												<Carousel className="w-full">
+													<CarouselContent className="-ml-0">
+														{finalImages.map(
+															(
+																imageUrl,
+																index
+															) => (
+																<CarouselItem
+																	key={`${quest.id}-${imageUrl}-${index}`}
+																	className="pl-0"
+																>
+																	<img
+																		src={
+																			imageUrl
+																		}
+																		alt={`${quest.name} — изображение ${index + 1}`}
+																		className="h-44 w-full object-cover"
+																	/>
+																</CarouselItem>
+															)
+														)}
+													</CarouselContent>
+													{finalImages.length > 1 && (
+														<>
+															<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
+															<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
+														</>
+													)}
+												</Carousel>
+											</div>
+										)
+									})()}
+									<CardHeader>
+										<CardTitle>{quest.name}</CardTitle>
+										<CardDescription>
+											{quest.description}
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="space-y-3">
+										<div className="flex items-center justify-between text-sm">
+											<span className="text-muted-foreground">
+												Уровень
+											</span>
+											<span className="font-medium">
+												{quest.level}
+											</span>
+										</div>
+										<div className="flex items-center justify-between text-sm">
+											<span className="text-muted-foreground">
+												Категория
+											</span>
+											<span className="font-medium">
+												{quest.category?.name ??
+													'Без категории'}
+											</span>
+										</div>
+										<div className="flex items-center justify-between text-sm">
+											<span className="text-muted-foreground">
+												Время
+											</span>
+											<span className="font-medium">
+												{quest.duration_min ?? 0} минут
+											</span>
+										</div>
+										<Link
+											href={`/routes/${quest.id}`}
+											className="block"
+										>
+											<Button
+												variant="ghost"
+												className="w-full justify-between"
+											>
+												Подробнее
+												<ArrowRight className="h-4 w-4" />
+											</Button>
+										</Link>
+									</CardContent>
+								</Card>
+							))
+						: null}
+					{!isLoadingQuests &&
+						!questsError &&
+						filteredQuests.length === 0 && (
+							<Card className="md:col-span-3">
+								<CardContent className="p-6">
+									<p className="text-muted-foreground text-sm">
+										Пока нет доступных квестов.
+									</p>
+								</CardContent>
+							</Card>
+						)}
+				</div>
 			</section>
 
 			<section className="mt-8">
