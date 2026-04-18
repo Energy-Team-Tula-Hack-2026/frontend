@@ -236,7 +236,7 @@ export default function HomePage() {
 				</div>
 
 				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-4">
+					<CardContent className="grid gap-3 p-4 md:grid-cols-5">
 						<div className="relative md:col-span-2">
 							<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 							<Input
@@ -252,7 +252,7 @@ export default function HomePage() {
 							value={enterpriseLevel}
 							onValueChange={setEnterpriseLevel}
 						>
-							<SelectTrigger>
+							<SelectTrigger className="w-full">
 								<SelectValue placeholder="Уровень" />
 							</SelectTrigger>
 							<SelectContent>
@@ -267,7 +267,7 @@ export default function HomePage() {
 							value={enterpriseCategory}
 							onValueChange={setEnterpriseCategory}
 						>
-							<SelectTrigger>
+							<SelectTrigger className="w-full md:col-span-2">
 								<SelectValue placeholder="Категория" />
 							</SelectTrigger>
 							<SelectContent>
