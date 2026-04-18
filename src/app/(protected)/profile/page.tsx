@@ -129,25 +129,8 @@ export default function ProfilePage() {
 		activeQuestIds.includes(quest.id)
 	)
 
-	const totalEarnedPoints = useMemo(() => {
-		if (!user) return 0
-		const pointsMap = new Map(
-			quests
-				.flatMap((quest) => quest.points)
-				.map((point) => [point.id, point.score])
-		)
-		const pointsScore =
-			user.points
-				?.filter((point) => point.status === 'COMPLETED')
-				.reduce(
-					(sum, point) => sum + (pointsMap.get(point.point_id) || 0),
-					0
-				) || 0
-		const dailyScore =
-			user.daily_completes?.reduce((sum, item) => sum + item.score, 0) ||
-			0
-		return pointsScore + dailyScore
-	}, [quests, user])
+	const availableBonuses = user?.statistic?.available_for_purchases ?? 0
+	const totalEarnedBonuses = user?.statistic?.score ?? 0
 
 	const getInitials = (name: string, surname?: string) => {
 		const safeSurname = surname || name
@@ -584,14 +567,24 @@ export default function ProfilePage() {
 				</div>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-3">
+			<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				<Card>
 					<CardContent className="pt-6">
 						<p className="text-muted-foreground text-sm">
-							Всего баллов
+							Доступно для покупок
 						</p>
 						<p className="mt-1 text-2xl font-semibold">
-							{totalEarnedPoints}
+							{availableBonuses}
+						</p>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardContent className="pt-6">
+						<p className="text-muted-foreground text-sm">
+							Заработано всего
+						</p>
+						<p className="mt-1 text-2xl font-semibold">
+							{totalEarnedBonuses}
 						</p>
 					</CardContent>
 				</Card>
