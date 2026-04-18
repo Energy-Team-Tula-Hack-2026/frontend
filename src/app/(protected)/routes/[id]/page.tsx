@@ -58,11 +58,17 @@ import {
 } from '@/shared/components/ui/avatar'
 import { Label } from '@/shared/components/ui/label'
 import { Textarea } from '@/shared/components/ui/textarea'
+import {
+	Carousel,
+	CarouselContent,
+	CarouselItem,
+	CarouselNext,
+	CarouselPrevious
+} from '@/shared/components/ui/carousel'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import {
 	detectCraftKind,
-	ENTERPRISE_QR_CODES,
-	getCraftOverview
+	ENTERPRISE_QR_CODES
 } from '@/shared/lib/craft-marketplace'
 import type { User as UserType, UserQuestStatus } from '@/shared/types'
 
@@ -74,6 +80,19 @@ function getEntryCodeByQuest(quest: QuestDto): string {
 		ENTERPRISE_QR_CODES.find((item) => item.kind === kind)?.code ??
 		'MUSEUM-POTTERY-001'
 	)
+}
+
+function getQuestLevelLabel(level: QuestDto['level']): string {
+	switch (level) {
+		case 'EASY':
+			return 'Базовый'
+		case 'MEDIUM':
+			return 'Средний'
+		case 'HARD':
+			return 'Продвинутый'
+		default:
+			return 'Без уровня'
+	}
 }
 
 function formatDate(dateString: string): string {
@@ -224,12 +243,6 @@ export default function RouteEnterprisePage() {
 	}, [id, isAuthenticated])
 
 	const isLoading = isLoadingQuest || isLoadingUser
-
-	const craftOverview = useMemo(() => {
-		if (!quest) return null
-		const kind = detectCraftKind(`${quest.name} ${quest.description}`)
-		return getCraftOverview(kind)
-	}, [quest])
 
 	const expectedCode = useMemo(
 		() => (quest ? getEntryCodeByQuest(quest) : ''),
@@ -405,6 +418,19 @@ export default function RouteEnterprisePage() {
 		)
 	}
 
+	const questImages = Array.from(
+		new Set([
+			...(quest.images
+				?.map((image) => image.image_url)
+				.filter((url): url is string => Boolean(url)) ?? []),
+			...(quest.points
+				?.map((point) => point.image_url)
+				.filter((url): url is string => Boolean(url)) ?? [])
+		])
+	)
+	const finalQuestImages =
+		questImages.length > 0 ? questImages : ['/placeholder-logo.png']
+
 	return (
 		<div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
 			<Button variant="ghost" onClick={() => router.back()}>
@@ -413,27 +439,52 @@ export default function RouteEnterprisePage() {
 			</Button>
 
 			<section className="rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50 p-7 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
+				<div className="bg-background mb-5 overflow-hidden rounded-2xl border">
+					<Carousel className="w-full">
+						<CarouselContent className="-ml-0">
+							{finalQuestImages.map((imageUrl, index) => (
+								<CarouselItem
+									key={`${quest.id}-${imageUrl}-${index}`}
+									className="pl-0"
+								>
+									<img
+										src={imageUrl}
+										alt={`${quest.name} — фото ${index + 1}`}
+										className="h-56 w-full object-cover sm:h-72"
+									/>
+								</CarouselItem>
+							))}
+						</CarouselContent>
+						{finalQuestImages.length > 1 && (
+							<>
+								<CarouselPrevious className="top-1/2 left-4 -translate-y-1/2 border-white/80 bg-white/85" />
+								<CarouselNext className="top-1/2 right-4 -translate-y-1/2 border-white/80 bg-white/85" />
+							</>
+						)}
+					</Carousel>
+				</div>
+
 				<Badge className="mb-3 w-fit border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/50 dark:text-amber-200">
 					Ремесленное предприятие
 				</Badge>
-				<h1 className="text-3xl font-semibold">
-					{craftOverview?.title}
-				</h1>
+				<h1 className="text-3xl font-semibold">{quest.name}</h1>
 				<p className="text-muted-foreground mt-3 max-w-3xl text-base">
-					{craftOverview?.description}
+					{quest.description}
 				</p>
 				<div className="mt-4 flex flex-wrap gap-4 text-sm">
 					<div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2">
 						<Sparkles className="h-4 w-4" />
-						{craftOverview?.level}
+						{getQuestLevelLabel(quest.level)}
 					</div>
 					<div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2">
 						<Clock className="h-4 w-4" />
-						{craftOverview?.duration}
+						{quest.duration_min ?? 0} минут
 					</div>
 					<div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2">
 						<MapPin className="h-4 w-4" />
-						{quest.category?.name ?? 'Ремесленный объект'}
+						{quest.category?.name ??
+							quest.location?.city_name ??
+							'Ремесленный объект'}
 					</div>
 				</div>
 			</section>
