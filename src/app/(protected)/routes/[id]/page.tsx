@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 
 import {
 	getQuestById,
+	registerUserQuest,
 	type QuestDto,
 	type QuestFeedbackDto
 } from '@/shared/api/quest'
@@ -66,21 +67,11 @@ import {
 	CarouselPrevious
 } from '@/shared/components/ui/carousel'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
-import {
-	detectCraftKind,
-	ENTERPRISE_QR_CODES
-} from '@/shared/lib/craft-marketplace'
 import type { User as UserType, UserQuestStatus } from '@/shared/types'
 
 const DEFAULT_AVATAR = '/user.jpg'
-
-function getEntryCodeByQuest(quest: QuestDto): string {
-	const kind = detectCraftKind(`${quest.name} ${quest.description}`)
-	return (
-		ENTERPRISE_QR_CODES.find((item) => item.kind === kind)?.code ??
-		'MUSEUM-POTTERY-001'
-	)
-}
+const QUEST_START_ERROR_MESSAGE =
+	'Не получилось отсканировать и начать прохождение квеста предприятия'
 
 function getQuestLevelLabel(level: QuestDto['level']): string {
 	switch (level) {
@@ -164,6 +155,10 @@ export default function RouteEnterprisePage() {
 	const [isScannerOpen, setIsScannerOpen] = useState(false)
 	const [manualCode, setManualCode] = useState('')
 	const [startMessage, setStartMessage] = useState<string | null>(null)
+	const [startMessageVariant, setStartMessageVariant] = useState<
+		'info' | 'error'
+	>('info')
+	const [isStartingQuest, setIsStartingQuest] = useState(false)
 
 	const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -244,15 +239,17 @@ export default function RouteEnterprisePage() {
 
 	const isLoading = isLoadingQuest || isLoadingUser
 
-	const expectedCode = useMemo(
-		() => (quest ? getEntryCodeByQuest(quest) : ''),
-		[quest]
-	)
+	const currentUserQuest = useMemo(() => {
+		if (!id || !user?.quests?.length) return null
+		return user.quests.find((item) => item.quest_id === id) ?? null
+	}, [id, user])
 
 	const userQuestStatus = useMemo(() => {
 		if (!id || !user?.quests?.length) return null
-		return user.quests.find((item) => item.quest_id === id)?.status || null
-	}, [id, user])
+		return currentUserQuest?.status || null
+	}, [id, user, currentUserQuest])
+
+	const hasUserQuest = Boolean(currentUserQuest)
 
 	const canLeaveFeedback = useMemo(
 		() =>
@@ -274,22 +271,60 @@ export default function RouteEnterprisePage() {
 		[userQuestStatus]
 	)
 
-	const handleStartByCode = (rawCode: string) => {
+	const handleStartByCode = async (rawCode: string) => {
 		const code = rawCode.trim().toUpperCase()
 		if (!quest) return
-		if (code !== expectedCode) {
-			setStartMessage('Код входа не совпадает с кодом предприятия.')
+
+		if (hasUserQuest) {
+			const message = 'Вы уже проходили этот квест'
+			setStartMessageVariant('info')
+			setStartMessage(message)
+			toast.info(message)
 			return
 		}
 
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(`quest_access_${quest.id}`, 'started')
+		if (!code || isStartingQuest) {
+			return
 		}
 
-		setStartMessage('Квест разблокирован. Переходим к прохождению...')
-		setTimeout(() => {
-			router.push(`/quest/${quest.id}`)
-		}, 500)
+		setIsStartingQuest(true)
+		setStartMessage(null)
+		setStartMessageVariant('info')
+
+		try {
+			const response = await registerUserQuest(code)
+
+			if (!response.quest_id) {
+				throw new Error(QUEST_START_ERROR_MESSAGE)
+			}
+
+			setIsScannerOpen(false)
+			setManualCode('')
+			router.push(`/quest/${response.quest_id}`)
+		} catch (err) {
+			const apiError = normalizeApiError(err, QUEST_START_ERROR_MESSAGE)
+			setStartMessageVariant('error')
+			setStartMessage(apiError.message)
+			toast.error(apiError.message)
+		} finally {
+			setIsStartingQuest(false)
+		}
+	}
+
+	const handleScannerOpenChange = (open: boolean) => {
+		if (open && hasUserQuest) {
+			const message = 'Вы уже проходили этот квест'
+			setStartMessageVariant('info')
+			setStartMessage(message)
+			toast.info(message)
+			return
+		}
+
+		setIsScannerOpen(open)
+		if (open) {
+			setStartMessage(null)
+			setStartMessageVariant('info')
+		}
 	}
 
 	const redirectToLogin = () => {
@@ -445,10 +480,10 @@ export default function RouteEnterprisePage() {
 				Назад
 			</Button>
 
-			<section className="rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50 p-7 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
+			<section className="rounded-3xl border border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 p-7 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
 				<div className="bg-background mb-5 overflow-hidden rounded-2xl border">
 					<Carousel className="w-full">
-						<CarouselContent className="-ml-0">
+						<CarouselContent className="ml-0">
 							{finalQuestImages.map((imageUrl, index) => (
 								<CarouselItem
 									key={`${quest.id}-${imageUrl}-${index}`}
@@ -545,20 +580,44 @@ export default function RouteEnterprisePage() {
 					<CardContent className="space-y-3">
 						<Button
 							className="w-full"
-							onClick={() => setIsScannerOpen(true)}
+							onClick={() => handleScannerOpenChange(true)}
+							disabled={hasUserQuest}
 						>
 							<QrCode className="mr-2 h-4 w-4" />
-							Сканировать QR входа
+							{hasUserQuest
+								? 'Квест уже начат'
+								: 'Сканировать QR входа'}
 						</Button>
-						<p className="text-muted-foreground rounded-lg border p-2 text-xs">
-							Тестовый код для запуска:{' '}
-							<span className="font-semibold">
-								{expectedCode}
-							</span>
-						</p>
+						{hasUserQuest && (
+							<div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+								<div className="flex items-center gap-2">
+									<CheckCircle2 className="h-4 w-4" />
+									<span>Вы уже проходили этот квест</span>
+								</div>
+								<Link href={`/quest/${quest.id}`}>
+									<Button
+										variant="outline"
+										size="sm"
+										className="w-full"
+									>
+										Перейти к квесту
+									</Button>
+								</Link>
+							</div>
+						)}
 						{startMessage && (
-							<div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
-								<CheckCircle2 className="mr-1 inline h-4 w-4" />
+							<div
+								className={`rounded-lg border p-3 text-sm ${
+									startMessageVariant === 'error'
+										? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300'
+										: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300'
+								}`}
+							>
+								{startMessageVariant === 'error' ? (
+									<AlertCircle className="mr-1 inline h-4 w-4" />
+								) : (
+									<CheckCircle2 className="mr-1 inline h-4 w-4" />
+								)}
 								{startMessage}
 							</div>
 						)}
@@ -729,7 +788,7 @@ export default function RouteEnterprisePage() {
 				)}
 			</section>
 
-			<Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+			<Dialog open={isScannerOpen} onOpenChange={handleScannerOpenChange}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>Проверка входного QR-кода</DialogTitle>
@@ -739,26 +798,53 @@ export default function RouteEnterprisePage() {
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-3">
-						<div className="mx-auto w-full max-w-[280px] overflow-hidden rounded-lg border">
+						<div className="mx-auto w-full max-w-70 overflow-hidden rounded-lg border">
 							<QrScanner
 								onScanSuccess={handleStartByCode}
 								onError={() => {}}
-								disabled={!isScannerOpen}
+								disabled={
+									!isScannerOpen ||
+									hasUserQuest ||
+									isStartingQuest
+								}
 								className="aspect-square w-full"
 							/>
 						</div>
-						<div className="flex gap-2">
+						<form
+							className="flex gap-2"
+							onSubmit={(event) => {
+								event.preventDefault()
+								handleStartByCode(manualCode)
+							}}
+						>
 							<Input
-								placeholder={expectedCode}
+								placeholder="Q-1B98A8"
 								value={manualCode}
 								onChange={(e) => setManualCode(e.target.value)}
+								disabled={hasUserQuest || isStartingQuest}
 							/>
 							<Button
-								onClick={() => handleStartByCode(manualCode)}
+								type="submit"
+								disabled={
+									hasUserQuest ||
+									isStartingQuest ||
+									!manualCode.trim()
+								}
 							>
-								Проверить
+								{isStartingQuest ? 'Запускаем...' : 'Проверить'}
 							</Button>
-						</div>
+						</form>
+						{startMessage && (
+							<p
+								className={`text-sm ${
+									startMessageVariant === 'error'
+										? 'text-destructive'
+										: 'text-muted-foreground'
+								}`}
+							>
+								{startMessage}
+							</p>
+						)}
 					</div>
 				</DialogContent>
 			</Dialog>
@@ -791,9 +877,9 @@ export default function RouteEnterprisePage() {
 						<div className="space-y-3">
 							<Label>Ваша оценка</Label>
 							<div className="flex items-center gap-1">
-								{[1, 2, 3, 4, 5].map((star) => (
+								{[1, 2, 3, 4, 5].map((star, index) => (
 									<button
-										key={star}
+										key={`${index}-${star}`}
 										type="button"
 										onClick={() => {
 											setFeedbackScore(star)
@@ -861,7 +947,7 @@ export default function RouteEnterprisePage() {
 						<Button
 							onClick={handleSubmitFeedback}
 							disabled={isSubmittingFeedback}
-							className="bg-gradient-to-r from-blue-500 to-purple-600"
+							className="bg-linear-to-r from-blue-500 to-purple-600"
 						>
 							{isSubmittingFeedback
 								? editingFeedback
