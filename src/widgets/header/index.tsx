@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -25,7 +26,8 @@ import {
 } from '@/shared/components/ui/sheet'
 import { ThemeToggle } from '@/shared/components/theme-toggle'
 import { useUser } from '@/shared/hooks/use-user'
-import { isPlatformAdmin } from '@/shared/lib/roles'
+import { canAccessAdminPanel, isOrganizer } from '@/shared/lib/roles'
+import { Skeleton } from '@/shared/components/ui/skeleton'
 
 const navLinks = [
 	{ href: '/crafts', label: 'Ремесла', icon: BookOpenText },
@@ -35,14 +37,29 @@ const navLinks = [
 ]
 
 export function Header() {
-	const { user } = useUser()
+	const { user, authMethod, isLoading, isAuthenticated } = useUser()
 	const pathname = usePathname()
+	const [isClient, setIsClient] = useState(false)
+
+	useEffect(() => {
+		setIsClient(true)
+	}, [])
+
+	const showNavSkeleton = !isClient || (isAuthenticated && isLoading && !user)
+	const isOrganizationSession = authMethod === 'organization'
+	const organizerOnly = isOrganizationSession || isOrganizer(user?.role)
+	const homeHref = organizerOnly ? '/admin' : '/'
+	const visibleNavLinks = organizerOnly
+		? navLinks.filter((link) => link.href === '/profile')
+		: navLinks
+	const canSeeAdminPanel =
+		isOrganizationSession || canAccessAdminPanel(user?.role)
 
 	return (
 		<header className="sticky top-0 z-40 border-b border-amber-900/10 bg-white/80 backdrop-blur-lg dark:border-zinc-700/70 dark:bg-zinc-950/80">
 			<div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 				<Link
-					href="/"
+					href={homeHref}
 					className="group flex shrink-0 items-center gap-3"
 				>
 					<div className="from-primary/20 to-primary/5 text-primary flex size-10 items-center justify-center rounded-xl bg-linear-to-br transition-transform group-hover:scale-105">
@@ -60,26 +77,35 @@ export function Header() {
 				</Link>
 
 				<nav className="hidden items-center gap-1 md:flex">
-					{navLinks.map(({ href, label, icon: Icon }) => {
-						const isActive =
-							pathname === href || pathname.startsWith(`${href}/`)
+					{showNavSkeleton ? (
+						<div className="flex items-center gap-2">
+							<Skeleton className="h-9 w-24 rounded-xl" />
+							<Skeleton className="h-9 w-24 rounded-xl" />
+							<Skeleton className="h-9 w-24 rounded-xl" />
+						</div>
+					) : (
+						visibleNavLinks.map(({ href, label, icon: Icon }) => {
+							const isActive =
+								pathname === href ||
+								pathname.startsWith(`${href}/`)
 
-						return (
-							<Link
-								key={href}
-								href={href}
-								className={cn(
-									'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors',
-									isActive
-										? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100'
-										: 'text-muted-foreground hover:bg-muted hover:text-foreground'
-								)}
-							>
-								<Icon className="size-4" />
-								<span>{label}</span>
-							</Link>
-						)
-					})}
+							return (
+								<Link
+									key={href}
+									href={href}
+									className={cn(
+										'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors',
+										isActive
+											? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100'
+											: 'text-muted-foreground hover:bg-muted hover:text-foreground'
+									)}
+								>
+									<Icon className="size-4" />
+									<span>{label}</span>
+								</Link>
+							)
+						})
+					)}
 				</nav>
 
 				<div className="flex items-center gap-2">
@@ -111,29 +137,32 @@ export function Header() {
 							</SheetHeader>
 
 							<nav className="flex flex-col gap-1 px-4 pb-4">
-								{navLinks.map(({ href, label, icon: Icon }) => {
-									const isActive =
-										pathname === href ||
-										pathname.startsWith(`${href}/`)
+								{!showNavSkeleton &&
+									visibleNavLinks.map(
+										({ href, label, icon: Icon }) => {
+											const isActive =
+												pathname === href ||
+												pathname.startsWith(`${href}/`)
 
-									return (
-										<SheetClose asChild key={href}>
-											<Link
-												href={href}
-												className={cn(
-													'inline-flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
-													isActive
-														? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100'
-														: 'text-foreground/90 hover:bg-muted'
-												)}
-											>
-												<Icon className="size-4" />
-												<span>{label}</span>
-											</Link>
-										</SheetClose>
-									)
-								})}
-								{isPlatformAdmin(user?.role) && (
+											return (
+												<SheetClose asChild key={href}>
+													<Link
+														href={href}
+														className={cn(
+															'inline-flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
+															isActive
+																? 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100'
+																: 'text-foreground/90 hover:bg-muted'
+														)}
+													>
+														<Icon className="size-4" />
+														<span>{label}</span>
+													</Link>
+												</SheetClose>
+											)
+										}
+									)}
+								{canSeeAdminPanel && (
 									<SheetClose asChild>
 										<Link
 											href="/admin"
@@ -147,7 +176,7 @@ export function Header() {
 							</nav>
 						</SheetContent>
 					</Sheet>
-					{isPlatformAdmin(user?.role) && (
+					{canSeeAdminPanel && (
 						<Link
 							href="/admin"
 							aria-label="Админ панель"

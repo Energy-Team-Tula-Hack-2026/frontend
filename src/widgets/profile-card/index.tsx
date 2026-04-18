@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { LogOut, Pencil } from 'lucide-react'
 
 import { Button } from '@/shared/components/ui/button'
@@ -34,7 +33,6 @@ export function ProfileCardWidget({
 		JSON.stringify(user)
 	)
 
-	const router = useRouter()
 	const [isEditing, setIsEditing] = useState(false)
 	const [isLoggingOut, setIsLoggingOut] = useState(false)
 
@@ -48,7 +46,7 @@ export function ProfileCardWidget({
 		localStorage.removeItem('oauth_is_new_user')
 
 		console.log('[v0] ProfileCardWidget - Redirecting to /login')
-		router.push('/login')
+		window.location.assign('/login')
 	}
 
 	const getInitials = (name: string, surname: string) => {

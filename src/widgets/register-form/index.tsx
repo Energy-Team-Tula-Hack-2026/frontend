@@ -1,7 +1,6 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,20 +25,28 @@ import {
 	FieldSeparator
 } from '@/shared/components/ui/field'
 import { Spinner } from '@/shared/components/ui/spinner'
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
+} from '@/shared/components/ui/select'
 
 import { register as registerUser, getOAuthUrl } from '@/shared/api/auth'
+import { registerOrganization } from '@/shared/api/organization'
 import { normalizeApiError } from '@/shared/api/errors'
 
-const registerSchema = z
+const userSchema = z
 	.object({
 		name: z
 			.string()
 			.min(2, 'Имя должно содержать минимум 2 символа')
-			.max(15, 'Имя должно быть максимум 15 символов'),
+			.max(15),
 		surname: z
 			.string()
 			.min(2, 'Фамилия должна содержать минимум 2 символа')
-			.max(15, 'Фамилия должна быть максимум 15 символов'),
+			.max(15),
 		email: z.string().email('Введите корректный email'),
 		password: z
 			.string()
@@ -51,65 +58,102 @@ const registerSchema = z
 		path: ['confirmPassword']
 	})
 
-type RegisterFormData = z.infer<typeof registerSchema>
+const organizationSchema = z
+	.object({
+		name: z.string().min(2, 'Название обязательно'),
+		email: z.string().email('Введите корректный email'),
+		password: z
+			.string()
+			.min(6, 'Пароль должен содержать минимум 6 символов'),
+		confirmPassword: z.string()
+	})
+	.refine((data) => data.password === data.confirmPassword, {
+		message: 'Пароли не совпадают',
+		path: ['confirmPassword']
+	})
+
+type UserRegisterFormData = z.infer<typeof userSchema>
+type OrganizationRegisterFormData = z.infer<typeof organizationSchema>
 
 export function RegisterFormWidget() {
-	console.log('[v0] RegisterFormWidget - Rendering')
-
-	const router = useRouter()
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [showPassword, setShowPassword] = useState(false)
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+	const [accountType, setAccountType] = useState<'user' | 'organization'>(
+		'user'
+	)
 
 	const {
 		register,
 		handleSubmit,
 		formState: { errors }
-	} = useForm<RegisterFormData>({
-		resolver: zodResolver(registerSchema)
+	} = useForm<UserRegisterFormData | OrganizationRegisterFormData>({
+		resolver: zodResolver(
+			accountType === 'organization' ? organizationSchema : userSchema
+		)
 	})
 
-	const onSubmit = async (data: RegisterFormData) => {
-		console.log('[v0] RegisterFormWidget - onSubmit called')
-		console.log('[v0] RegisterFormWidget - Form data:', {
-			name: data.name,
-			surname: data.surname,
-			email: data.email,
-			passwordLength: data.password.length
-		})
-
+	const onSubmit = async (
+		data: UserRegisterFormData | OrganizationRegisterFormData
+	) => {
 		setIsLoading(true)
 		setError(null)
 
 		try {
-			console.log('[v0] RegisterFormWidget - Calling register API')
-			const result = await registerUser({
-				name: data.name,
-				surname: data.surname,
-				email: data.email,
-				password: data.password
+			if (accountType === 'organization') {
+				const orgData = data as OrganizationRegisterFormData
+				await registerOrganization({
+					name: orgData.name,
+					email: orgData.email,
+					password: orgData.password,
+					description: '',
+					website_link: ''
+				})
+
+				sessionStorage.setItem(
+					'pending_organization_register',
+					JSON.stringify({
+						name: orgData.name,
+						email: orgData.email,
+						password: orgData.password,
+						description: '',
+						website_link: ''
+					})
+				)
+
+				toast.success(
+					'Код подтверждения отправлен на почту организации'
+				)
+				window.location.assign(
+					`/verify?mode=verify-organization&email=${encodeURIComponent(orgData.email)}`
+				)
+				return
+			}
+
+			const userData = data as UserRegisterFormData
+			await registerUser({
+				name: userData.name,
+				surname: userData.surname,
+				email: userData.email,
+				password: userData.password
 			})
 
 			sessionStorage.setItem(
 				'pending_register_change',
 				JSON.stringify({
-					name: data.name,
-					surname: data.surname,
-					email: data.email,
-					password: data.password
+					name: userData.name,
+					surname: userData.surname,
+					email: userData.email,
+					password: userData.password
 				})
 			)
 
-			console.log('[v0] RegisterFormWidget - Register success:', result)
 			toast.success('Код подтверждения отправлен на вашу почту')
-
-			console.log('[v0] RegisterFormWidget - Redirecting to /verify')
-			router.push(
-				`/verify?mode=verify-email&email=${encodeURIComponent(data.email)}`
+			window.location.assign(
+				`/verify?mode=verify-email&email=${encodeURIComponent(userData.email)}`
 			)
 		} catch (err: unknown) {
-			console.error('[v0] RegisterFormWidget - Register error:', err)
 			const apiError = normalizeApiError(
 				err,
 				'Пользователь с указанной почтой уже существует'
@@ -122,9 +166,7 @@ export function RegisterFormWidget() {
 	}
 
 	const handleOAuth = (provider: 'google' | 'yandex') => {
-		console.log('[v0] RegisterFormWidget - OAuth clicked:', provider)
 		const url = getOAuthUrl(provider)
-		console.log('[v0] RegisterFormWidget - Redirecting to:', url)
 		window.location.href = url
 	}
 
@@ -136,48 +178,77 @@ export function RegisterFormWidget() {
 			</CardHeader>
 			<CardContent>
 				<div className="flex flex-col gap-4">
-					<div className="flex flex-col gap-3">
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full"
-							onClick={() => handleOAuth('google')}
+					<div className="space-y-2">
+						<p className="text-sm font-medium">Тип аккаунта</p>
+						<Select
+							value={accountType}
+							onValueChange={(value: 'user' | 'organization') =>
+								setAccountType(value)
+							}
 						>
-							<GoogleIcon className="size-5" />
-							Регистрация через Google
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full"
-							onClick={() => handleOAuth('yandex')}
-						>
-							<YandexIcon className="size-5" />
-							Регистрация через Яндекс
-						</Button>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="user">
+									Пользователь
+								</SelectItem>
+								<SelectItem value="organization">
+									Организатор
+								</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
-					<FieldSeparator>или</FieldSeparator>
+					{accountType === 'user' && (
+						<>
+							<div className="flex flex-col gap-3">
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full"
+									onClick={() => handleOAuth('google')}
+								>
+									<GoogleIcon className="size-5" />
+									Регистрация через Google
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full"
+									onClick={() => handleOAuth('yandex')}
+								>
+									<YandexIcon className="size-5" />
+									Регистрация через Яндекс
+								</Button>
+							</div>
+
+							<FieldSeparator>или</FieldSeparator>
+						</>
+					)}
 
 					<form onSubmit={handleSubmit(onSubmit)}>
 						<FieldGroup>
-							<div className="grid grid-cols-2 gap-4">
-								<Field>
-									<FieldLabel htmlFor="name">Имя</FieldLabel>
-									<Input
-										id="name"
-										type="text"
-										placeholder="Иван"
-										{...register('name')}
-										aria-invalid={!!errors.name}
-									/>
-									{errors.name && (
-										<FieldError>
-											{errors.name.message}
-										</FieldError>
-									)}
-								</Field>
+							<Field>
+								<FieldLabel htmlFor="name">
+									{accountType === 'organization'
+										? 'Название организации'
+										: 'Имя'}
+								</FieldLabel>
+								<Input
+									id="name"
+									type="text"
+									{...register('name')}
+									aria-invalid={!!errors.name}
+								/>
+								{errors.name && (
+									<FieldError>
+										{errors.name.message as string}
+									</FieldError>
+								)}
+							</Field>
 
+							{accountType === 'user' && (
 								<Field>
 									<FieldLabel htmlFor="surname">
 										Фамилия
@@ -185,17 +256,16 @@ export function RegisterFormWidget() {
 									<Input
 										id="surname"
 										type="text"
-										placeholder="Иванов"
-										{...register('surname')}
-										aria-invalid={!!errors.surname}
+										{...register('surname' as 'surname')}
+										aria-invalid={!!(errors as any).surname}
 									/>
-									{errors.surname && (
+									{(errors as any).surname && (
 										<FieldError>
-											{errors.surname.message}
+											{(errors as any).surname.message}
 										</FieldError>
 									)}
 								</Field>
-							</div>
+							)}
 
 							<Field>
 								<FieldLabel htmlFor="email">Email</FieldLabel>
@@ -208,7 +278,7 @@ export function RegisterFormWidget() {
 								/>
 								{errors.email && (
 									<FieldError>
-										{errors.email.message}
+										{errors.email.message as string}
 									</FieldError>
 								)}
 							</Field>
@@ -223,10 +293,8 @@ export function RegisterFormWidget() {
 										type={
 											showPassword ? 'text' : 'password'
 										}
-										placeholder="Минимум 6 символов"
 										className="pr-10"
 										{...register('password')}
-										aria-invalid={!!errors.password}
 									/>
 									<Button
 										type="button"
@@ -235,11 +303,6 @@ export function RegisterFormWidget() {
 										className="absolute top-1/2 right-1 size-8 -translate-y-1/2"
 										onClick={() =>
 											setShowPassword((prev) => !prev)
-										}
-										aria-label={
-											showPassword
-												? 'Скрыть пароль'
-												: 'Показать пароль'
 										}
 									>
 										{showPassword ? (
@@ -251,7 +314,7 @@ export function RegisterFormWidget() {
 								</div>
 								{errors.password && (
 									<FieldError>
-										{errors.password.message}
+										{errors.password.message as string}
 									</FieldError>
 								)}
 							</Field>
@@ -268,10 +331,8 @@ export function RegisterFormWidget() {
 												? 'text'
 												: 'password'
 										}
-										placeholder="Повторите пароль"
 										className="pr-10"
 										{...register('confirmPassword')}
-										aria-invalid={!!errors.confirmPassword}
 									/>
 									<Button
 										type="button"
@@ -283,11 +344,6 @@ export function RegisterFormWidget() {
 												(prev) => !prev
 											)
 										}
-										aria-label={
-											showConfirmPassword
-												? 'Скрыть подтверждение пароля'
-												: 'Показать подтверждение пароля'
-										}
 									>
 										{showConfirmPassword ? (
 											<EyeOff className="size-4" />
@@ -298,7 +354,10 @@ export function RegisterFormWidget() {
 								</div>
 								{errors.confirmPassword && (
 									<FieldError>
-										{errors.confirmPassword.message}
+										{
+											errors.confirmPassword
+												.message as string
+										}
 									</FieldError>
 								)}
 							</Field>

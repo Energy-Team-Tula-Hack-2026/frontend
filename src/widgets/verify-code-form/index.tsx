@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -25,26 +25,36 @@ import {
 	changePassword,
 	register
 } from '@/shared/api/auth'
+import {
+	registerOrganization,
+	requestOrganizationPasswordChange,
+	verifyOrganization
+} from '@/shared/api/organization'
 import { normalizeApiError } from '@/shared/api/errors'
 
 const CODE_LENGTH = 6
 const RESEND_TIMEOUT = 120
 
-type VerifyMode = 'verify-email' | 'change-password'
+type VerifyMode =
+	| 'verify-email'
+	| 'change-password'
+	| 'change-password-organization'
+	| 'verify-organization'
 
 export function VerifyCodeFormWidget() {
-	console.log('[v0] VerifyCodeFormWidget - Rendering')
-
 	const searchParams = useSearchParams()
 	const router = useRouter()
 
 	const email = searchParams.get('email') || ''
 	const rawMode = searchParams.get('mode')
 	const mode: VerifyMode =
-		rawMode === 'change-password' ? 'change-password' : 'verify-email'
-
-	console.log('[v0] VerifyCodeFormWidget - Mode:', mode)
-	console.log('[v0] VerifyCodeFormWidget - Email from URL:', email)
+		rawMode === 'change-password'
+			? 'change-password'
+			: rawMode === 'change-password-organization'
+				? 'change-password-organization'
+				: rawMode === 'verify-organization'
+					? 'verify-organization'
+					: 'verify-email'
 
 	const [code, setCode] = useState('')
 	const [isLoading, setIsLoading] = useState(false)
@@ -52,37 +62,28 @@ export function VerifyCodeFormWidget() {
 	const [resendTimer, setResendTimer] = useState(RESEND_TIMEOUT)
 	const [canResend, setCanResend] = useState(false)
 
-	useEffect(() => {
-		console.log('[v0] VerifyCodeFormWidget - Resend timer:', resendTimer)
+	const isOrganizationPasswordFlow = mode === 'change-password-organization'
 
+	useEffect(() => {
 		if (resendTimer > 0) {
 			const timer = setTimeout(
 				() => setResendTimer(resendTimer - 1),
 				1000
 			)
 			return () => clearTimeout(timer)
-		} else {
-			setCanResend(true)
-			console.log('[v0] VerifyCodeFormWidget - Resend enabled')
 		}
+		setCanResend(true)
 	}, [resendTimer])
 
 	const handleSubmit = async () => {
 		if (isLoading) return
 
-		console.log('[v0] VerifyCodeFormWidget - handleSubmit called')
-		console.log('[v0] VerifyCodeFormWidget - Code:', code)
-		console.log('[v0] VerifyCodeFormWidget - Code length:', code.length)
-		console.log('[v0] VerifyCodeFormWidget - Mode:', mode)
-
 		if (code.length !== CODE_LENGTH) {
-			console.log('[v0] VerifyCodeFormWidget - Code incomplete')
 			setError('Введите полный код')
 			return
 		}
 
 		if (!email) {
-			console.log('[v0] VerifyCodeFormWidget - Email is missing')
 			setError('Не найден email для подтверждения')
 			return
 		}
@@ -91,37 +92,39 @@ export function VerifyCodeFormWidget() {
 		setError(null)
 
 		try {
-			console.log('[v0] VerifyCodeFormWidget - Calling verifyCode API')
-			const tokens = await verifyCode({ email, code })
+			if (mode === 'verify-organization' || isOrganizationPasswordFlow) {
+				const tokens = await verifyOrganization({
+					email,
+					verify_code: code
+				})
+				TokenManager.saveTokens(tokens)
+				TokenManager.saveAuthMethod('organization')
+				toast.success(
+					mode === 'verify-organization'
+						? 'Организация подтверждена'
+						: 'Пароль сотрудника подтвержден'
+				)
+				window.location.assign('/admin')
+				return
+			}
 
-			console.log(
-				'[v0] VerifyCodeFormWidget - Verification success, saving tokens'
-			)
+			const tokens = await verifyCode({ email, code })
 			TokenManager.saveTokens(tokens)
 			TokenManager.saveAuthMethod('password')
 
 			if (mode === 'change-password') {
-				toast.success('Пароль успешно подтверждён')
-				console.log(
-					'[v0] VerifyCodeFormWidget - Password change confirmed, redirecting to /profile'
-				)
+				toast.success('Пароль успешно подтвержден')
 			} else {
-				toast.success('Email подтвержден!')
-				console.log(
-					'[v0] VerifyCodeFormWidget - Email verified, redirecting to /profile'
-				)
+				toast.success('Email подтвержден')
 			}
 
-			router.push('/profile')
+			window.location.assign('/profile')
 		} catch (err: unknown) {
-			console.error('[v0] VerifyCodeFormWidget - Verify error:', err)
-
 			const apiError = normalizeApiError(
 				err,
 				'Неверный код подтверждения'
 			)
 			setError(apiError.message)
-
 			toast.error(apiError.message)
 		} finally {
 			setIsLoading(false)
@@ -129,13 +132,14 @@ export function VerifyCodeFormWidget() {
 	}
 
 	const handleResend = async () => {
-		console.log('[v0] VerifyCodeFormWidget - handleResend called')
-		console.log('[v0] VerifyCodeFormWidget - canResend:', canResend)
-		console.log('[v0] VerifyCodeFormWidget - mode:', mode)
-
 		if (!canResend || isLoading) return
 
-		if (mode === 'verify-email' && !email) {
+		if (
+			(mode === 'verify-email' ||
+				mode === 'verify-organization' ||
+				isOrganizationPasswordFlow) &&
+			!email
+		) {
 			setError('Не найден email для повторной отправки')
 			return
 		}
@@ -144,18 +148,32 @@ export function VerifyCodeFormWidget() {
 			typeof window !== 'undefined'
 				? sessionStorage.getItem('pending_password_change')
 				: null
-
 		const parsedPasswordChange = pendingPasswordChange
 			? JSON.parse(pendingPasswordChange)
 			: null
+		const pendingOrganizationPasswordChange =
+			typeof window !== 'undefined'
+				? sessionStorage.getItem('pending_organization_password_change')
+				: null
+		const parsedOrganizationPasswordChange =
+			pendingOrganizationPasswordChange
+				? JSON.parse(pendingOrganizationPasswordChange)
+				: null
 
 		const pendingRegisterChange =
 			typeof window !== 'undefined'
 				? sessionStorage.getItem('pending_register_change')
 				: null
+		const parsedRegisterChange = pendingRegisterChange
+			? JSON.parse(pendingRegisterChange)
+			: null
 
-		const parsedRegisterChange = pendingPasswordChange
-			? JSON.parse(pendingRegisterChange as string)
+		const pendingOrganizationRegister =
+			typeof window !== 'undefined'
+				? sessionStorage.getItem('pending_organization_register')
+				: null
+		const parsedOrganizationRegister = pendingOrganizationRegister
+			? JSON.parse(pendingOrganizationRegister)
 			: null
 
 		setCanResend(false)
@@ -164,35 +182,40 @@ export function VerifyCodeFormWidget() {
 
 		try {
 			if (mode === 'change-password') {
-				console.log(
-					'[v0] VerifyCodeFormWidget - Calling requestPasswordChange API'
-				)
 				await changePassword(parsedPasswordChange.newPassword)
-				console.log(
-					'[v0] VerifyCodeFormWidget - Password change code resent successfully'
+				toast.success('Код для смены пароля отправлен повторно')
+				return
+			}
+
+			if (isOrganizationPasswordFlow) {
+				await requestOrganizationPasswordChange(
+					parsedOrganizationPasswordChange.newPassword
 				)
 				toast.success('Код для смены пароля отправлен повторно')
-			} else {
-				console.log(
-					'[v0] VerifyCodeFormWidget - Calling resendVerificationCode API'
-				)
-				const data = {
-					name: parsedRegisterChange.name,
-					surname: parsedRegisterChange.surname,
-					email: parsedRegisterChange.email,
-					password: parsedRegisterChange.password
-				}
-				await register(data)
-				console.log(
-					'[v0] VerifyCodeFormWidget - Registration code resent successfully'
-				)
-				toast.success('Код подтверждения отправлен повторно')
+				return
 			}
+
+			if (mode === 'verify-organization') {
+				await registerOrganization({
+					name: parsedOrganizationRegister.name,
+					email: parsedOrganizationRegister.email,
+					password: parsedOrganizationRegister.password,
+					description: parsedOrganizationRegister.description,
+					website_link: parsedOrganizationRegister.website_link
+				})
+				toast.success('Код подтверждения отправлен повторно')
+				return
+			}
+
+			await register({
+				name: parsedRegisterChange.name,
+				surname: parsedRegisterChange.surname,
+				email: parsedRegisterChange.email,
+				password: parsedRegisterChange.password
+			})
+			toast.success('Код подтверждения отправлен повторно')
 		} catch (err: unknown) {
-			console.error('[v0] VerifyCodeFormWidget - Resend error:', err)
-
 			const apiError = normalizeApiError(err, 'Ошибка отправки кода')
-
 			setError(apiError.message)
 			toast.error(apiError.message)
 			setCanResend(true)
@@ -201,12 +224,7 @@ export function VerifyCodeFormWidget() {
 	}
 
 	useEffect(() => {
-		console.log('[v0] VerifyCodeFormWidget - Code changed:', code)
-
 		if (code.length === CODE_LENGTH) {
-			console.log(
-				'[v0] VerifyCodeFormWidget - Code complete, auto-submitting'
-			)
 			handleSubmit()
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,22 +232,21 @@ export function VerifyCodeFormWidget() {
 
 	const title =
 		mode === 'change-password'
-			? 'Подтверждение смены пароля'
-			: 'Подтверждение'
+			? isOrganizationPasswordFlow
+				? 'Подтверждение смены пароля сотрудника'
+				: 'Подтверждение смены пароля'
+			: mode === 'change-password-organization'
+				? 'Подтверждение смены пароля сотрудника'
+				: mode === 'verify-organization'
+					? 'Подтверждение организации'
+					: 'Подтверждение'
 
 	const description =
-		mode === 'change-password' ? (
-			<>
-				Введите код, отправленный на{' '}
-				<span className="text-foreground font-medium">{email}</span> для
-				подтверждения смены пароля
-			</>
-		) : (
-			<>
-				Введите код, отправленный на{' '}
-				<span className="text-foreground font-medium">{email}</span>
-			</>
-		)
+		mode === 'change-password' ||
+		mode === 'change-password-organization' ||
+		isOrganizationPasswordFlow
+			? `Введите код, отправленный на ${email} для подтверждения смены пароля`
+			: `Введите код, отправленный на ${email}`
 
 	return (
 		<Card className="w-full max-w-md">
@@ -243,13 +260,7 @@ export function VerifyCodeFormWidget() {
 					<InputOTP
 						maxLength={CODE_LENGTH}
 						value={code}
-						onChange={(val) => {
-							console.log(
-								'[v0] VerifyCodeFormWidget - OTP onChange:',
-								val
-							)
-							setCode(val)
-						}}
+						onChange={(val) => setCode(val)}
 						disabled={isLoading}
 					>
 						<InputOTPGroup>
