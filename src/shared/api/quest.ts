@@ -1,4 +1,4 @@
-import api from '@/shared/api/instance'
+﻿import api from '@/shared/api/instance'
 import { normalizeApiError } from '@/shared/api/errors'
 
 const API_PREFIX = '/api/v2'
@@ -9,7 +9,6 @@ export type QuestCategory = {
 	created_at?: string
 	updated_at?: string
 }
-
 export type QuestPointDto = {
 	id: string
 	quest_id: string
@@ -74,10 +73,7 @@ export type QuestDto = {
 	rating?: number | null
 	category?: QuestCategory | null
 	location?: {
-		city_id?: string
-		city_name?: string
-		region_id?: string
-		region_name?: string
+		city?: string | null
 		latitude?: number
 		longitude?: number
 	} | null
@@ -94,16 +90,23 @@ export async function getQuestCategories(): Promise<QuestCategory[]> {
 		const response = await api.get(`${API_PREFIX}/quest/category`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить категории')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°С‚РµРіРѕСЂРёРё'
+		)
 	}
 }
 
 export async function getQuests(): Promise<QuestDto[]> {
 	try {
 		const response = await api.get(`${API_PREFIX}/quest/`)
+		console.log('Quests response:', response.data)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить квесты')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєРІРµСЃС‚С‹'
+		)
 	}
 }
 
@@ -112,7 +115,10 @@ export async function getQuestById(questId: string): Promise<QuestDto> {
 		const response = await api.get(`${API_PREFIX}/quest/${questId}`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить квест')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєРІРµСЃС‚'
+		)
 	}
 }
 
@@ -157,7 +163,10 @@ export async function getDailyPoint(): Promise<DailyPointDto> {
 		const response = await api.get(`${API_PREFIX}/quest/point/daily`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить дневную точку')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґРЅРµРІРЅСѓСЋ С‚РѕС‡РєСѓ'
+		)
 	}
 }
 
@@ -176,7 +185,7 @@ export async function validateDailyPoint(
 	} catch (error) {
 		throw normalizeApiError(
 			error,
-			'Не удалось отметить точку как посещённую'
+			'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РјРµС‚РёС‚СЊ С‚РѕС‡РєСѓ РєР°Рє РїРѕСЃРµС‰С‘РЅРЅСѓСЋ'
 		)
 	}
 }
