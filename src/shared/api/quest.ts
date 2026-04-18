@@ -1,4 +1,4 @@
-import api from '@/shared/api/instance'
+﻿import api from '@/shared/api/instance'
 import { normalizeApiError } from '@/shared/api/errors'
 
 const API_PREFIX = '/api/v2'
@@ -8,6 +8,17 @@ export type QuestCategory = {
 	name: string
 	created_at?: string
 	updated_at?: string
+}
+export type QuestLocationCity = {
+	id: string
+	name: string
+	region_id: string
+}
+
+export type QuestLocationRegion = {
+	id: string
+	name: string
+	cities: QuestLocationCity[]
 }
 
 export type QuestPointDto = {
@@ -94,16 +105,33 @@ export async function getQuestCategories(): Promise<QuestCategory[]> {
 		const response = await api.get(`${API_PREFIX}/quest/category`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить категории')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°С‚РµРіРѕСЂРёРё'
+		)
 	}
 }
 
+export async function getQuestLocations(): Promise<QuestLocationRegion[]> {
+	try {
+		const response = await api.get(`${API_PREFIX}/quest/location`)
+		return response.data
+	} catch (error) {
+		throw normalizeApiError(
+			error,
+			'Не удалось загрузить список регионов и городов'
+		)
+	}
+}
 export async function getQuests(): Promise<QuestDto[]> {
 	try {
 		const response = await api.get(`${API_PREFIX}/quest/`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить квесты')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєРІРµСЃС‚С‹'
+		)
 	}
 }
 
@@ -112,7 +140,10 @@ export async function getQuestById(questId: string): Promise<QuestDto> {
 		const response = await api.get(`${API_PREFIX}/quest/${questId}`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить квест')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєРІРµСЃС‚'
+		)
 	}
 }
 
@@ -136,7 +167,10 @@ export async function getDailyPoint(): Promise<DailyPointDto> {
 		const response = await api.get(`${API_PREFIX}/quest/point/daily`)
 		return response.data
 	} catch (error) {
-		throw normalizeApiError(error, 'Не удалось загрузить дневную точку')
+		throw normalizeApiError(
+			error,
+			'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґРЅРµРІРЅСѓСЋ С‚РѕС‡РєСѓ'
+		)
 	}
 }
 
@@ -155,7 +189,7 @@ export async function validateDailyPoint(
 	} catch (error) {
 		throw normalizeApiError(
 			error,
-			'Не удалось отметить точку как посещённую'
+			'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РјРµС‚РёС‚СЊ С‚РѕС‡РєСѓ РєР°Рє РїРѕСЃРµС‰С‘РЅРЅСѓСЋ'
 		)
 	}
 }
