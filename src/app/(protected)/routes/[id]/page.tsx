@@ -490,7 +490,7 @@ export default function RouteEnterprisePage() {
 					<div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2">
 						<MapPin className="h-4 w-4" />
 						{quest.category?.name ??
-							quest.location?.city_name ??
+							quest.location?.city ??
 							'Ремесленный объект'}
 					</div>
 				</div>
