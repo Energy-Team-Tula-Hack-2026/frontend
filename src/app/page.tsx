@@ -52,7 +52,6 @@ import {
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import { QuestCard } from '@/widgets/quest-card'
 import { EventsCalendarEmbed } from '@/widgets/events/events-calendar-embed'
-import { CRAFT_PRODUCTS } from '@/shared/lib/craft-marketplace'
 
 const QUEST_START_ERROR_MESSAGE =
 	'Не получилось отсканировать и начать прохождение квеста предприятия'
@@ -73,10 +72,6 @@ export default function HomePage() {
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
 	const [enterpriseCategory, setEnterpriseCategory] = useState<string>('all')
-
-	const [productSearch, setProductSearch] = useState('')
-	const [productCategory, setProductCategory] = useState<string>('all')
-	const [productSeller, setProductSeller] = useState<string>('all')
 
 	useEffect(() => {
 		let isMounted = true
@@ -135,29 +130,6 @@ export default function HomePage() {
 			return matchesSearch && matchesLevel && matchesCategory
 		})
 	}, [quests, enterpriseSearch, enterpriseLevel, enterpriseCategory])
-
-	const filteredProducts = useMemo(() => {
-		return CRAFT_PRODUCTS.filter((product) => {
-			const matchesSearch =
-				product.title
-					.toLowerCase()
-					.includes(productSearch.toLowerCase()) ||
-				product.description
-					.toLowerCase()
-					.includes(productSearch.toLowerCase())
-			const matchesCategory =
-				productCategory === 'all' ||
-				product.category === productCategory
-			const matchesSeller =
-				productSeller === 'all' || product.sellerType === productSeller
-			return matchesSearch && matchesCategory && matchesSeller
-		})
-	}, [productSearch, productCategory, productSeller])
-
-	const featuredProducts = useMemo(
-		() => filteredProducts.slice(0, 4),
-		[filteredProducts]
-	)
 
 	const handleQrCode = async (rawCode: string) => {
 		const normalizedCode = rawCode.trim().toUpperCase()
@@ -353,116 +325,6 @@ export default function HomePage() {
 				{questsError && (
 					<p className="text-destructive text-sm">{questsError}</p>
 				)}
-			</section>
-
-			<section className="space-y-4">
-				<div className="flex flex-wrap items-center justify-between gap-3">
-					<h2 className="text-2xl font-semibold">
-						Ремесленные товары
-					</h2>
-					<Link href="/shop">
-						<Button variant="outline" size="sm">
-							Перейти в магазин
-						</Button>
-					</Link>
-				</div>
-
-				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-5">
-						<div className="relative md:col-span-2">
-							<Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-							<Input
-								value={productSearch}
-								onChange={(e) =>
-									setProductSearch(e.target.value)
-								}
-								placeholder="Поиск товара"
-								className="pl-9"
-							/>
-						</div>
-						<Select
-							value={productCategory}
-							onValueChange={setProductCategory}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Категория" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">
-									Все категории
-								</SelectItem>
-								<SelectItem value="Декор">Декор</SelectItem>
-								<SelectItem value="Одежда">Одежда</SelectItem>
-								<SelectItem value="Сувениры">
-									Сувениры
-								</SelectItem>
-								<SelectItem value="Посуда">Посуда</SelectItem>
-							</SelectContent>
-						</Select>
-						<div className="md:col-span-2">
-							<Select
-								value={productSeller}
-								onValueChange={setProductSeller}
-							>
-								<SelectTrigger className="w-full min-w-0">
-									<SelectValue placeholder="Продавец" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">
-										Все продавцы
-									</SelectItem>
-									<SelectItem value="organization">
-										Организации
-									</SelectItem>
-									<SelectItem value="user">
-										Пользователи
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-					</CardContent>
-				</Card>
-
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-					{featuredProducts.map((product) => (
-						<Card
-							key={product.id}
-							className="group h-full overflow-hidden border-amber-100/80 bg-white/90 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-700/60 dark:bg-zinc-900/70"
-						>
-							<img
-								src={
-									product.images[0] || '/placeholder-logo.png'
-								}
-								alt={product.title}
-								className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-							/>
-							<CardContent className="flex h-56.25 flex-col gap-2 p-4">
-								<p className="line-clamp-1 font-semibold">
-									{product.title}
-								</p>
-								<p className="text-muted-foreground line-clamp-3 text-sm">
-									{product.description}
-								</p>
-								<div className="mt-1 flex items-center justify-between">
-									<Badge variant="secondary">
-										{product.category}
-									</Badge>
-									<span className="text-base font-semibold">
-										{product.priceRub} ₽
-									</span>
-								</div>
-								<Link
-									href={`/shop/${product.id}`}
-									className="mt-auto"
-								>
-									<Button size="sm" className="w-full">
-										Открыть товар
-									</Button>
-								</Link>
-							</CardContent>
-						</Card>
-					))}
-				</div>
 			</section>
 
 			<Dialog open={isScannerOpen} onOpenChange={handleScannerOpenChange}>
