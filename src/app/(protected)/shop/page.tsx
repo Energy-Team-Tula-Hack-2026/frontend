@@ -115,6 +115,11 @@ export default function ShopPage() {
 	const [buyItem, setBuyItem] = useState<ShopItemDto | null>(null)
 	const [buyQuantity, setBuyQuantity] = useState(1)
 	const [buyUsedBonuses, setBuyUsedBonuses] = useState(0)
+	const [isPurchaseInfoOpen, setIsPurchaseInfoOpen] = useState(false)
+	const [selectedPurchase, setSelectedPurchase] =
+		useState<ShopPurchaseDto | null>(null)
+	const [shouldOpenPurchaseInfoOnReturn, setShouldOpenPurchaseInfoOnReturn] =
+		useState(false)
 
 	const availableBonuses = user?.statistic?.available_for_purchases ?? 0
 
@@ -167,6 +172,25 @@ export default function ShopPage() {
 			setItems(itemsData)
 			setCart(cartData)
 			setPurchases(purchasesData)
+
+			if (shouldOpenPurchaseInfoOnReturn) {
+				const latestRelevantPurchase =
+					purchasesData.find((purchase) => purchase.confirmed) ||
+					purchasesData[0] ||
+					null
+
+				if (latestRelevantPurchase) {
+					setSelectedPurchase(latestRelevantPurchase)
+					setIsPurchaseInfoOpen(true)
+				}
+
+				if (typeof window !== 'undefined') {
+					const url = new URL(window.location.href)
+					url.searchParams.delete('purchase')
+					window.history.replaceState({}, '', url.toString())
+				}
+				setShouldOpenPurchaseInfoOnReturn(false)
+			}
 		} catch (error) {
 			const apiError = normalizeApiError(
 				error,
@@ -177,6 +201,14 @@ export default function ShopPage() {
 			setIsLoading(false)
 		}
 	}
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const params = new URLSearchParams(window.location.search)
+		if (params.get('purchase') === 'done') {
+			setShouldOpenPurchaseInfoOnReturn(true)
+		}
+	}, [])
 
 	useEffect(() => {
 		if (isUserLoading) {
@@ -226,7 +258,7 @@ export default function ShopPage() {
 		try {
 			const returnUrl =
 				typeof window !== 'undefined'
-					? `${window.location.origin}/shop`
+					? `${window.location.origin}/shop?purchase=done`
 					: ''
 			const result = await createShopPurchase({
 				item_id: itemId,
@@ -657,9 +689,14 @@ export default function ShopPage() {
 								</p>
 							)}
 							{purchases.map((purchase) => (
-								<div
+								<button
 									key={purchase.id}
-									className="rounded-lg border p-3 text-sm"
+									type="button"
+									onClick={() => {
+										setSelectedPurchase(purchase)
+										setIsPurchaseInfoOpen(true)
+									}}
+									className="hover:bg-muted/40 w-full rounded-lg border p-3 text-left text-sm transition-colors"
 								>
 									<div className="flex items-center justify-between">
 										<p className="font-medium">
@@ -689,7 +726,8 @@ export default function ShopPage() {
 												className="mt-2"
 												size="sm"
 												variant="outline"
-												onClick={() => {
+												onClick={(event) => {
+													event.stopPropagation()
 													window.location.href =
 														purchase.confirmation_url as string
 												}}
@@ -697,7 +735,7 @@ export default function ShopPage() {
 												Закончить оплату
 											</Button>
 										)}
-								</div>
+								</button>
 							))}
 						</CardContent>
 					</Card>
@@ -974,6 +1012,74 @@ export default function ShopPage() {
 									}
 								>
 									Перейти к оплате
+								</Button>
+							</div>
+						</div>
+					) : null}
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				open={isPurchaseInfoOpen}
+				onOpenChange={setIsPurchaseInfoOpen}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Информация о покупке</DialogTitle>
+						<DialogDescription>
+							Статус заказа и дальнейшие действия.
+						</DialogDescription>
+					</DialogHeader>
+					{selectedPurchase ? (
+						<div className="space-y-3 text-sm">
+							<div className="flex items-center justify-between rounded-lg border p-3">
+								<span className="text-muted-foreground">
+									Номер покупки
+								</span>
+								<span className="font-medium">
+									#{selectedPurchase.id.slice(0, 8)}
+								</span>
+							</div>
+							<div className="flex items-center justify-between rounded-lg border p-3">
+								<span className="text-muted-foreground">
+									Сумма
+								</span>
+								<span className="font-medium">
+									{formatShopPrice(selectedPurchase.amount)}
+								</span>
+							</div>
+							<div className="rounded-lg border p-3">
+								<p className="text-muted-foreground">Статус:</p>
+								<p className="mt-1 font-medium">
+									{selectedPurchase.is_cancelled
+										? 'Оплата отменена'
+										: selectedPurchase.confirmed
+											? 'Оплата подтверждена'
+											: 'Ожидает оплаты'}
+								</p>
+							</div>
+							{selectedPurchase.confirmed ? (
+								<div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+									Оплата прошла успешно. С вами свяжется
+									курьер для уточнения деталей доставки.
+								</div>
+							) : selectedPurchase.is_cancelled ? (
+								<div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-100">
+									Платеж был отменен. Вы можете оформить
+									покупку повторно.
+								</div>
+							) : (
+								<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+									Покупка ожидает оплаты. После успешной
+									оплаты с вами свяжется курьер.
+								</div>
+							)}
+							<div className="flex justify-end">
+								<Button
+									variant="outline"
+									onClick={() => setIsPurchaseInfoOpen(false)}
+								>
+									Закрыть
 								</Button>
 							</div>
 						</div>
