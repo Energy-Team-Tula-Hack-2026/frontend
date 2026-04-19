@@ -70,14 +70,18 @@ npm run dev
 
 Frontend зависит от backend API.
 
-| Переменная            | Назначение      | Без неё не работает |
-| --------------------- | --------------- | ------------------- |
-| `NEXT_PUBLIC_API_URL` | URL backend API | Запросы к серверу   |
+| Переменная                       | Назначение             | Без неё не работает     |
+| -------------------------------- | ---------------------- | ----------------------- |
+| `NEXT_PUBLIC_API_URL`            | URL backend API        | Запросы к серверу       |
+| `NEXT_PUBLIC_OAUTH_REDIRECT_URL` | URL OAuth redirect     | Перенаправление OAuth   |
+| `NEXT_PUBLIC_DADATA_TOKEN`       | Получение DADATA_TOKEN | Библиотека DADATA_TOKEN |
 
 ### Пример `.env`
 
 ```env
 NEXT_PUBLIC_API_URL=https://api.energy-team-hack.ru
+NEXT_PUBLIC_OAUTH_REDIRECT_URL=https://energy-team-hack.ru/callback
+NEXT_PUBLIC_DADATA_TOKEN=7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d
 ```
 
 ## ✅ Готовый frontend
@@ -103,4 +107,5 @@ npm run build
 
 # запуск production-сборки
 npm run start
+
 ```
