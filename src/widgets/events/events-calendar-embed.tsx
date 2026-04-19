@@ -92,15 +92,15 @@ export function EventsCalendarEmbed({ enabled }: Props) {
 		return map
 	}, [monthEvents])
 
-	useEffect(() => {
-		if (selectedDay === null) return
-		if (!eventsByDay.has(selectedDay)) {
-			setSelectedDay(null)
-		}
-	}, [eventsByDay, selectedDay])
+	const visibleSelectedDay =
+		selectedDay !== null && eventsByDay.has(selectedDay)
+			? selectedDay
+			: null
 
 	const selectedDayEvents =
-		selectedDay === null ? [] : (eventsByDay.get(selectedDay) ?? [])
+		visibleSelectedDay === null
+			? []
+			: (eventsByDay.get(visibleSelectedDay) ?? [])
 
 	const nearestEvent = useMemo(() => {
 		if (events.length === 0) return null
@@ -233,7 +233,8 @@ export function EventsCalendarEmbed({ enabled }: Props) {
 										)
 									}
 
-									const isSelected = cell.day === selectedDay
+									const isSelected =
+										cell.day === visibleSelectedDay
 									const isToday =
 										selectedMonth ===
 											today.getMonth() + 1 &&
@@ -244,9 +245,10 @@ export function EventsCalendarEmbed({ enabled }: Props) {
 										<button
 											key={cell.day}
 											type="button"
-											onClick={() =>
+											onClick={() => {
+												if (!hasEvents) return
 												setSelectedDay(cell.day)
-											}
+											}}
 											className={[
 												'flex h-14 flex-col rounded-lg border p-1.5 text-left transition sm:h-16',
 												hasEvents
@@ -314,7 +316,7 @@ export function EventsCalendarEmbed({ enabled }: Props) {
 								)}
 							</div>
 
-							{selectedDay === null ? (
+							{visibleSelectedDay === null ? (
 								<p className="text-muted-foreground rounded-lg border border-dashed p-3 text-sm">
 									Выберите день на календаре, чтобы посмотреть
 									события.
@@ -322,7 +324,7 @@ export function EventsCalendarEmbed({ enabled }: Props) {
 							) : (
 								<>
 									<p className="font-semibold">
-										{selectedDay}{' '}
+										{visibleSelectedDay}{' '}
 										{MONTHS[selectedMonth - 1]}
 									</p>
 									{selectedDayEvents.length === 0 ? (
