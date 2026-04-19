@@ -56,6 +56,8 @@ type ItemFormState = {
 	link: string
 }
 
+type ItemFormErrors = Partial<Record<keyof ItemFormState, string>>
+
 const EMPTY_FORM: ItemFormState = {
 	title: '',
 	description: '',
@@ -85,6 +87,32 @@ function getItemImages(item?: ShopItemDto | null): string[] {
 
 	const unique = Array.from(new Set(imageUrls))
 	return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE]
+}
+
+function validateCreateForm(form: ItemFormState): ItemFormErrors {
+	const errors: ItemFormErrors = {}
+
+	if (!form.title.trim()) {
+		errors.title = 'Введите название товара'
+	}
+
+	if (!form.description.trim()) {
+		errors.description = 'Введите описание товара'
+	}
+
+	if (!Number.isFinite(form.quantity) || form.quantity < 1) {
+		errors.quantity = 'Укажите количество больше 0'
+	}
+
+	if (!Number.isFinite(form.price) || form.price <= 0) {
+		errors.price = 'Укажите цену больше 0'
+	}
+
+	if (!form.link.trim()) {
+		errors.link = 'Укажите ссылку на товар'
+	}
+
+	return errors
 }
 
 async function uploadManyPhotos(files: File[]): Promise<string[]> {
@@ -174,6 +202,7 @@ export default function SellerPage() {
 	const [deletingId, setDeletingId] = useState<string | null>(null)
 
 	const [createForm, setCreateForm] = useState<ItemFormState>(EMPTY_FORM)
+	const [createFormErrors, setCreateFormErrors] = useState<ItemFormErrors>({})
 	const [createImageFiles, setCreateImageFiles] = useState<File[]>([])
 	const [editingItem, setEditingItem] = useState<ShopItemDto | null>(null)
 	const [editForm, setEditForm] = useState<ItemFormState>(EMPTY_FORM)
@@ -207,6 +236,22 @@ export default function SellerPage() {
 		} finally {
 			setIsLoading(false)
 		}
+	}
+
+	const updateCreateForm = <TField extends keyof ItemFormState>(
+		field: TField,
+		value: ItemFormState[TField]
+	) => {
+		setCreateForm((prev) => ({
+			...prev,
+			[field]: value
+		}))
+		setCreateFormErrors((prev) => {
+			if (!prev[field]) return prev
+
+			const { [field]: _removedError, ...nextErrors } = prev
+			return nextErrors
+		})
 	}
 
 	useEffect(() => {
@@ -278,14 +323,20 @@ export default function SellerPage() {
 							<Input
 								id="create-title"
 								className="mt-1 h-11"
+								aria-invalid={Boolean(createFormErrors.title)}
 								value={createForm.title}
 								onChange={(event) =>
-									setCreateForm((prev) => ({
-										...prev,
-										title: event.target.value
-									}))
+									updateCreateForm(
+										'title',
+										event.target.value
+									)
 								}
 							/>
+							{createFormErrors.title && (
+								<p className="text-destructive mt-1 text-xs">
+									{createFormErrors.title}
+								</p>
+							)}
 						</div>
 						<div className="sm:col-span-2">
 							<Label htmlFor="create-description">Описание</Label>
@@ -293,14 +344,22 @@ export default function SellerPage() {
 								id="create-description"
 								className="mt-1 min-h-24"
 								rows={3}
+								aria-invalid={Boolean(
+									createFormErrors.description
+								)}
 								value={createForm.description}
 								onChange={(event) =>
-									setCreateForm((prev) => ({
-										...prev,
-										description: event.target.value
-									}))
+									updateCreateForm(
+										'description',
+										event.target.value
+									)
 								}
 							/>
+							{createFormErrors.description && (
+								<p className="text-destructive mt-1 text-xs">
+									{createFormErrors.description}
+								</p>
+							)}
 						</div>
 						<div>
 							<Label htmlFor="create-quantity">Количество</Label>
@@ -309,14 +368,22 @@ export default function SellerPage() {
 								className="mt-1 h-11"
 								type="number"
 								min={1}
+								aria-invalid={Boolean(
+									createFormErrors.quantity
+								)}
 								value={createForm.quantity}
 								onChange={(event) =>
-									setCreateForm((prev) => ({
-										...prev,
-										quantity: Number(event.target.value)
-									}))
+									updateCreateForm(
+										'quantity',
+										Number(event.target.value)
+									)
 								}
 							/>
+							{createFormErrors.quantity && (
+								<p className="text-destructive mt-1 text-xs">
+									{createFormErrors.quantity}
+								</p>
+							)}
 						</div>
 						<div>
 							<Label htmlFor="create-price">Цена</Label>
@@ -325,28 +392,37 @@ export default function SellerPage() {
 								className="mt-1 h-11"
 								type="number"
 								min={0}
+								aria-invalid={Boolean(createFormErrors.price)}
 								value={createForm.price}
 								onChange={(event) =>
-									setCreateForm((prev) => ({
-										...prev,
-										price: Number(event.target.value)
-									}))
+									updateCreateForm(
+										'price',
+										Number(event.target.value)
+									)
 								}
 							/>
+							{createFormErrors.price && (
+								<p className="text-destructive mt-1 text-xs">
+									{createFormErrors.price}
+								</p>
+							)}
 						</div>
 						<div className="sm:col-span-2">
 							<Label htmlFor="create-link">Ссылка на товар</Label>
 							<Input
 								id="create-link"
 								className="mt-1 h-11"
+								aria-invalid={Boolean(createFormErrors.link)}
 								value={createForm.link}
 								onChange={(event) =>
-									setCreateForm((prev) => ({
-										...prev,
-										link: event.target.value
-									}))
+									updateCreateForm('link', event.target.value)
 								}
 							/>
+							{createFormErrors.link && (
+								<p className="text-destructive mt-1 text-xs">
+									{createFormErrors.link}
+								</p>
+							)}
 						</div>
 					</div>
 
@@ -369,6 +445,16 @@ export default function SellerPage() {
 							size="lg"
 							disabled={isCreating}
 							onClick={async () => {
+								const errors = validateCreateForm(createForm)
+								setCreateFormErrors(errors)
+
+								if (Object.keys(errors).length > 0) {
+									toast.error(
+										'Заполните обязательные поля товара'
+									)
+									return
+								}
+
 								setIsCreating(true)
 								try {
 									const uploadedUrls =
@@ -390,6 +476,7 @@ export default function SellerPage() {
 
 									toast.success('Товар создан')
 									setCreateForm(EMPTY_FORM)
+									setCreateFormErrors({})
 									setCreateImageFiles([])
 									await loadItems()
 								} catch (error) {
