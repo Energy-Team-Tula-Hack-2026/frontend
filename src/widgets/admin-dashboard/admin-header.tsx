@@ -21,7 +21,7 @@ export function AdminHeader({ isOrganizerSession }: AdminHeaderProps) {
 						<p className="text-muted-foreground">
 							{isOrganizerSession
 								? 'Управление квестами и точками'
-								: 'Управление квестами, точками и достижениями'}
+								: 'Управление квестами и точками'}
 						</p>
 					</div>
 				</div>
