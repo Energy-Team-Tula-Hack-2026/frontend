@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import {
 	Award,
 	Camera,
+	ChevronLeft,
+	ChevronRight,
 	ExternalLink,
 	Globe,
 	LogOut,
@@ -16,6 +18,7 @@ import { toast } from 'sonner'
 
 import { useUser } from '@/shared/hooks/use-user'
 import { getQuests, type QuestDto } from '@/shared/api/quest'
+import { getAchievements, type AchievementDto } from '@/shared/api/achievement'
 import { normalizeApiError } from '@/shared/api/errors'
 import { uploadPhoto } from '@/shared/api/media'
 import { deleteMe, updateUser } from '@/shared/api/user'
@@ -54,11 +57,18 @@ import {
 } from '@/shared/components/ui/dialog'
 
 export default function ProfilePage() {
+	const ACHIEVEMENTS_PER_PAGE = 9
 	const router = useRouter()
 	const { user, isLoading, isAuthenticated, mutate } = useUser()
 
 	const [quests, setQuests] = useState<QuestDto[]>([])
 	const [questsError, setQuestsError] = useState<string | null>(null)
+	const [achievements, setAchievements] = useState<AchievementDto[]>([])
+	const [achievementsPage, setAchievementsPage] = useState(1)
+	const [achievementsError, setAchievementsError] = useState<string | null>(
+		null
+	)
+	const [isAchievementsLoading, setIsAchievementsLoading] = useState(false)
 	const [isEditing, setIsEditing] = useState(false)
 	const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
 	const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined)
@@ -113,6 +123,35 @@ export default function ProfilePage() {
 		}
 	}, [user])
 
+	useEffect(() => {
+		if (!user || user.role === 'organizer') return
+		let cancelled = false
+		const load = async () => {
+			setIsAchievementsLoading(true)
+			setAchievementsError(null)
+			try {
+				const data = await getAchievements()
+				if (cancelled) return
+				setAchievements(data)
+			} catch (err) {
+				if (cancelled) return
+				const apiError = normalizeApiError(
+					err,
+					'Не удалось загрузить достижения'
+				)
+				setAchievementsError(apiError.message)
+			} finally {
+				if (!cancelled) {
+					setIsAchievementsLoading(false)
+				}
+			}
+		}
+		load()
+		return () => {
+			cancelled = true
+		}
+	}, [user])
+
 	const completedQuestIds =
 		user?.quests
 			?.filter((quest) => quest.status === 'COMPLETED')
@@ -131,6 +170,36 @@ export default function ProfilePage() {
 
 	const availableBonuses = user?.statistic?.available_for_purchases ?? 0
 	const totalEarnedBonuses = user?.statistic?.score ?? 0
+	const unlockedAchievementIds = useMemo(() => {
+		return new Set(
+			(user?.achievements ?? [])
+				.map(
+					(item) =>
+						item.achievement_id ||
+						item.achievement?.id ||
+						(item as { id?: string }).id
+				)
+				.filter((id): id is string => Boolean(id))
+		)
+	}, [user?.achievements])
+	const totalAchievementPages = Math.max(
+		1,
+		Math.ceil(achievements.length / ACHIEVEMENTS_PER_PAGE)
+	)
+	const visibleAchievements = useMemo(() => {
+		const start = (achievementsPage - 1) * ACHIEVEMENTS_PER_PAGE
+		return achievements.slice(start, start + ACHIEVEMENTS_PER_PAGE)
+	}, [achievements, achievementsPage])
+
+	useEffect(() => {
+		setAchievementsPage(1)
+	}, [achievements.length, user?.id])
+
+	useEffect(() => {
+		if (achievementsPage > totalAchievementPages) {
+			setAchievementsPage(totalAchievementPages)
+		}
+	}, [achievementsPage, totalAchievementPages])
 
 	const getInitials = (name: string, surname?: string) => {
 		const safeSurname = surname || name
@@ -683,6 +752,148 @@ export default function ProfilePage() {
 								</p>
 							</Link>
 						))}
+					</CardContent>
+				</Card>
+			</section>
+
+			<section>
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2 text-lg">
+							<Award className="h-4 w-4" />
+							Все достижения
+						</CardTitle>
+						<CardDescription>
+							Открытые достижения выделены обычным цветом.
+							Неоткрытые отображаются серым.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						{achievementsError && (
+							<p className="text-destructive text-sm">
+								{achievementsError}
+							</p>
+						)}
+						{isAchievementsLoading && (
+							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+								{Array.from({ length: 6 }).map((_, index) => (
+									<div
+										key={`achievement-skeleton-${index}`}
+										className="bg-muted h-24 animate-pulse rounded-lg"
+									/>
+								))}
+							</div>
+						)}
+						{!isAchievementsLoading &&
+							achievements.length === 0 && (
+								<p className="text-muted-foreground text-sm">
+									Список достижений пока пуст.
+								</p>
+							)}
+						{!isAchievementsLoading && achievements.length > 0 && (
+							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+								{visibleAchievements.map((achievement) => {
+									const isUnlocked =
+										unlockedAchievementIds.has(
+											achievement.id
+										)
+									return (
+										<div
+											key={achievement.id}
+											className={`rounded-lg border p-3 transition ${
+												isUnlocked
+													? 'bg-card'
+													: 'bg-muted/30 opacity-55 grayscale'
+											}`}
+										>
+											<div className="flex items-start gap-3">
+												<div className="bg-muted flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border">
+													{achievement.image_url ? (
+														<img
+															src={
+																achievement.image_url
+															}
+															alt={
+																achievement.name
+															}
+															className="h-full w-full object-cover"
+														/>
+													) : (
+														<Award className="text-muted-foreground h-6 w-6" />
+													)}
+												</div>
+												<div className="min-w-0 flex-1">
+													<div className="flex items-start justify-between gap-2">
+														<p className="line-clamp-2 font-medium">
+															{achievement.name}
+														</p>
+														<Badge
+															variant={
+																isUnlocked
+																	? 'default'
+																	: 'secondary'
+															}
+															className="shrink-0"
+														>
+															{isUnlocked
+																? 'Получено'
+																: 'Не получено'}
+														</Badge>
+													</div>
+													<p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+														{
+															achievement.description
+														}
+													</p>
+												</div>
+											</div>
+										</div>
+									)
+								})}
+							</div>
+						)}
+						{!isAchievementsLoading && achievements.length > 0 && (
+							<div className="flex items-center justify-between border-t pt-3">
+								<p className="text-muted-foreground text-xs">
+									Страница {achievementsPage} из{' '}
+									{totalAchievementPages}
+								</p>
+								<div className="flex items-center gap-2">
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={achievementsPage <= 1}
+										aria-label="Предыдущая страница"
+										onClick={() =>
+											setAchievementsPage((prev) =>
+												Math.max(1, prev - 1)
+											)
+										}
+									>
+										<ChevronLeft className="h-4 w-4" />
+									</Button>
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={
+											achievementsPage >=
+											totalAchievementPages
+										}
+										aria-label="Следующая страница"
+										onClick={() =>
+											setAchievementsPage((prev) =>
+												Math.min(
+													totalAchievementPages,
+													prev + 1
+												)
+											)
+										}
+									>
+										<ChevronRight className="h-4 w-4" />
+									</Button>
+								</div>
+							</div>
+						)}
 					</CardContent>
 				</Card>
 			</section>
