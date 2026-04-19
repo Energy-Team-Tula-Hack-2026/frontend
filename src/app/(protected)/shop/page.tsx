@@ -302,9 +302,9 @@ export default function ShopPage() {
 
 	return (
 		<div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
-			<section className="relative overflow-hidden rounded-3xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-8 dark:border-emerald-900/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-cyan-950/20">
+			<section className="relative overflow-hidden rounded-3xl border border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 p-8 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
 				<div className="relative">
-					<Badge className="mb-3 w-fit bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100">
+					<Badge className="mb-3 w-fit bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">
 						<Sparkles className="mr-1 h-3.5 w-3.5" />
 						Магазин ремесел
 					</Badge>
