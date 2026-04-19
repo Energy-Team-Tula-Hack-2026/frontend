@@ -498,10 +498,10 @@ export default function RouteEnterprisePage() {
 							))}
 						</CarouselContent>
 						{finalQuestImages.length > 1 && (
-							<>
-								<CarouselPrevious className="top-1/2 left-4 -translate-y-1/2 border-white/80 bg-white/85" />
-								<CarouselNext className="top-1/2 right-4 -translate-y-1/2 border-white/80 bg-white/85" />
-							</>
+							<CarouselPrevious className="top-1/2 left-4 -translate-y-1/2 border-white/80 bg-white/85" />
+						)}
+						{finalQuestImages.length > 1 && (
+							<CarouselNext className="top-1/2 right-4 -translate-y-1/2 border-white/80 bg-white/85" />
 						)}
 					</Carousel>
 				</div>
@@ -553,7 +553,10 @@ export default function RouteEnterprisePage() {
 								.sort((a, b) => a.priority - b.priority)
 								.map((point, index) => (
 									<div
-										key={point.id}
+										key={
+											point.id ||
+											`${point.quest_id}-${point.priority}-${index}`
+										}
 										className="rounded-lg border p-3"
 									>
 										<p className="text-sm font-semibold">
@@ -647,7 +650,7 @@ export default function RouteEnterprisePage() {
 								</div>
 							)}
 							{canLeaveFeedback ? (
-								<>
+								<div>
 									<p className="text-muted-foreground mb-3">
 										Поделитесь впечатлениями о квесте
 									</p>
@@ -659,7 +662,7 @@ export default function RouteEnterprisePage() {
 										<Star className="mr-2 h-4 w-4" />
 										Оставить отзыв
 									</Button>
-								</>
+								</div>
 							) : (
 								<p className="text-muted-foreground">
 									Начните проходить квест, чтобы оставить
@@ -684,13 +687,16 @@ export default function RouteEnterprisePage() {
 					</Card>
 				) : (
 					<div className="space-y-4">
-						{quest.feedbacks.map((review) => {
+						{quest.feedbacks.map((review, index) => {
 							const isOwnReview = Boolean(
 								user?.id && user.id === review.user_id
 							)
 							return (
 								<Card
-									key={review.id}
+									key={
+										review.id ||
+										`${review.user_id}-${review.created_at}-${index}`
+									}
 									className="overflow-hidden"
 								>
 									<CardContent className="p-6">
@@ -744,7 +750,7 @@ export default function RouteEnterprisePage() {
 														</span>
 													</div>
 													{isOwnReview && (
-														<>
+														<div className="flex items-center gap-1">
 															<Button
 																variant="ghost"
 																size="icon"
@@ -769,7 +775,7 @@ export default function RouteEnterprisePage() {
 															>
 																<Trash2 className="h-4 w-4" />
 															</Button>
-														</>
+														</div>
 													)}
 												</div>
 											</div>
