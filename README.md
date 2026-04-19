@@ -10,7 +10,9 @@ Frontend для хакатона Tula Hack 2026 от команды Energy-Team.
 | --------------------------------- | --------------------------- |
 | **Frontend (Next.js приложение)** | https://energy-team-hack.ru |
 
-> 💡 **Совет:** Для полноценного тестирования используйте frontend вместе с развёрнутым API.
+> 💡 **Совет:** Для полноценного тестирования используйте frontend вместе с развёрнутым API:
+> - **Backend API:** https://api.energy-team-hack.ru/docs
+> - **Flower (мониторинг Celery):** https://flower.energy-team-hack.ru (логин: `admin`, пароль: `madrid`)
 
 ---
 
@@ -27,19 +29,53 @@ Frontend для хакатона Tula Hack 2026 от команды Energy-Team.
 
 - **Prettier** — форматирование
 - **npm** — менеджер пакетов
+- **Docker + Docker Compose** — контейнеризация
 
 ---
 
 ## 🚀 Локальный запуск
 
-### Требования
+### Общие требования
 
-- **Node.js 22+**
-- **npm**
+- **Node.js 22+** и **npm** — для локальной разработки (Способ 2)
+- **Docker + Docker Compose** — для обоих способов
+
+> 💡 **Примечание:** При использовании Docker Compose (Способ 1) устанавливать Node.js и npm локально не требуется.
 
 ---
 
-### Быстрый старт
+### Способ 1: Через Docker Compose (рекомендуется)
+
+Полный запуск проекта в контейнере:
+
+1. **Клонирование репозитория**
+
+```bash
+git clone https://github.com/Energy-Team-Tula-Hack-2026/frontend.git tula-hack-frontend
+cd tula-hack-frontend
+```
+
+2. **Настройка переменных окружения**
+
+```bash
+cp .env.example .env
+```
+
+3. **Запуск контейнера**
+
+```bash
+docker compose up -d --build
+```
+
+**Приложение будет доступно:**
+
+- Frontend: http://localhost:3000
+
+---
+
+### Способ 2: Локальная разработка (Node.js + npm)
+
+Для разработки с hot-reload и отладкой:
 
 1. **Клонирование репозитория**
 
@@ -54,27 +90,33 @@ cd tula-hack-frontend
 npm install
 ```
 
-3. **Запуск dev-сервера**
+3. **Настройка переменных окружения**
+
+```bash
+cp .env.example .env
+```
+
+4. **Запуск dev-сервера**
 
 ```bash
 npm run dev
 ```
 
-4. **Открытие приложения**
+**Приложение будет доступно:**
 
-- [http://localhost:3000](http://localhost:3000)
+- Frontend: http://localhost:3000
 
 ---
 
 ## ⚠️ Важные замечания
 
-Frontend зависит от backend API.
+Frontend зависит от backend API. Без правильных переменных окружения некоторые функции не будут работать.
 
-| Переменная                       | Назначение             | Без неё не работает     |
-| -------------------------------- | ---------------------- | ----------------------- |
-| `NEXT_PUBLIC_API_URL`            | URL backend API        | Запросы к серверу       |
-| `NEXT_PUBLIC_OAUTH_REDIRECT_URL` | URL OAuth redirect     | Перенаправление OAuth   |
-| `NEXT_PUBLIC_DADATA_TOKEN`       | Получение DADATA_TOKEN | Библиотека DADATA_TOKEN |
+| Переменная                       | Назначение             | Без неё не работает     | Тестовое значение                                    |
+| -------------------------------- | ---------------------- | ----------------------- | ---------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`            | URL backend API        | Запросы к серверу       | `https://api.energy-team-hack.ru`                    |
+| `NEXT_PUBLIC_OAUTH_REDIRECT_URL` | URL OAuth redirect     | Перенаправление OAuth   | `https://energy-team-hack.ru/callback`               |
+| `NEXT_PUBLIC_DADATA_TOKEN`       | Токен DaData           | Подсказки адресов       | `7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d` (тестовый) |
 
 ### Пример `.env`
 
@@ -84,7 +126,12 @@ NEXT_PUBLIC_OAUTH_REDIRECT_URL=https://energy-team-hack.ru/callback
 NEXT_PUBLIC_DADATA_TOKEN=7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d
 ```
 
-## ✅ Готовый frontend
+> ⚠️ **Важно:** 
+> - Без `NEXT_PUBLIC_API_URL` не будут работать запросы к backend
+> - Без `NEXT_PUBLIC_OAUTH_REDIRECT_URL` не сработает OAuth авторизация
+> - Без `NEXT_PUBLIC_DADATA_TOKEN` не будут работать подсказки адресов
+
+### ✅ Готовый frontend для тестирования
 
 | Сервис       | URL                                                        |
 | ------------ | ---------------------------------------------------------- |
@@ -92,20 +139,61 @@ NEXT_PUBLIC_DADATA_TOKEN=7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d
 
 Backend для тестирования:
 
-- [https://api.energy-team-hack.ru/docs](https://api.energy-team-hack.ru/docs)
+- [Swagger UI](https://api.energy-team-hack.ru/docs)
+- [Flower](https://flower.energy-team-hack.ru) (логин: `admin`, пароль: `madrid`)
 
 ---
 
 ## 📝 Дополнительные команды
 
 ```bash
-# запуск dev-сервера
+# Запуск dev-сервера
 npm run dev
 
-# сборка production
+# Сборка production-версии
 npm run build
 
-# запуск production-сборки
+# Запуск production-сборки
 npm run start
 
+# Форматирование кода
+npm run format
+
+# Линтинг кода
+npm run lint
+```
+
+---
+
+## 🐳 Docker Compose (подробнее)
+
+Файл `docker-compose.yml`:
+
+```yaml
+version: '3.9'
+
+services:
+    frontend:
+        build: .
+        container_name: tula-hack-2026-frontend
+        env_file:
+            - .env
+        ports:
+            - '3000:3000'
+```
+
+### Команды Docker
+
+```bash
+# Запуск в фоновом режиме
+docker compose up -d
+
+# Просмотр логов
+docker compose logs -f frontend
+
+# Остановка контейнера
+docker compose down
+
+# Пересборка контейнера
+docker compose up -d --build
 ```
