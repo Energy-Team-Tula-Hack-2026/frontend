@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 import {
 	Card,
@@ -67,6 +68,7 @@ export function OAuthCallbackWidget() {
 						'[v0] OAuthCallbackWidget - No access_token in cookies'
 					)
 					setError('Не удалось получить токен авторизации')
+					toast.error('Не удалось получить токен авторизации')
 					setIsProcessing(false)
 					return
 				}
@@ -76,6 +78,7 @@ export function OAuthCallbackWidget() {
 						'[v0] OAuthCallbackWidget - Invalid or missing is_new_user flag'
 					)
 					setError('Не удалось определить статус пользователя')
+					toast.error('Не удалось определить статус пользователя')
 					setIsProcessing(false)
 					return
 				}
@@ -98,16 +101,19 @@ export function OAuthCallbackWidget() {
 					console.log(
 						'[v0] OAuthCallbackWidget - New OAuth user, redirecting to /complete-profile'
 					)
+					toast.success('Вход выполнен. Заполните профиль')
 					router.push('/complete-profile')
 				} else {
 					console.log(
 						'[v0] OAuthCallbackWidget - Existing OAuth user, redirecting to /profile'
 					)
+					toast.success('Успешный вход')
 					router.push('/profile')
 				}
 			} catch (err) {
 				console.error('[v0] OAuthCallbackWidget - Error:', err)
 				setError('Ошибка обработки авторизации')
+				toast.error('Ошибка обработки авторизации')
 				setIsProcessing(false)
 			}
 		}

@@ -216,11 +216,14 @@ export default function SellerPage() {
 		return items.filter((item) => item.seller_id === user.id)
 	}, [items, user?.id])
 
-	const resetEditState = () => {
+	const resetEditState = (showCancelToast = false) => {
 		setEditingItem(null)
 		setEditForm(EMPTY_FORM)
 		setEditImageFiles([])
 		setEditExistingImageUrls([])
+		if (showCancelToast) {
+			toast.info('Редактирование товара отменено')
+		}
 	}
 
 	const loadItems = async () => {
@@ -257,6 +260,12 @@ export default function SellerPage() {
 	useEffect(() => {
 		void loadItems()
 	}, [])
+
+	useEffect(() => {
+		if (!isUserLoading && !canManage) {
+			toast.error('Доступ к странице продавца запрещен')
+		}
+	}, [canManage, isUserLoading])
 
 	if (isUserLoading) {
 		return (
@@ -625,7 +634,7 @@ export default function SellerPage() {
 
 			<Dialog
 				open={Boolean(editingItem)}
-				onOpenChange={(open) => !open && resetEditState()}
+				onOpenChange={(open) => !open && resetEditState(true)}
 			>
 				<DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
 					<DialogHeader>
@@ -791,7 +800,10 @@ export default function SellerPage() {
 						/>
 					</div>
 					<DialogFooter className="border-t pt-4">
-						<Button variant="outline" onClick={resetEditState}>
+						<Button
+							variant="outline"
+							onClick={() => resetEditState(true)}
+						>
 							Отмена
 						</Button>
 						<Button

@@ -129,6 +129,7 @@ export default function HomePage() {
 				setQuestsError(apiError.message)
 				setQuests([])
 				setQuestCategories([])
+				toast.error(apiError.message)
 			} finally {
 				if (isMounted) setIsLoadingQuests(false)
 			}
@@ -178,6 +179,7 @@ export default function HomePage() {
 				)
 				setDailyQuestionsError(apiError.message)
 				setDailyQuestions([])
+				toast.error(apiError.message)
 			} finally {
 				if (isMounted) setIsLoadingDailyQuestions(false)
 			}
@@ -282,6 +284,11 @@ export default function HomePage() {
 				...prev,
 				[question.id]: response.is_correct ? 'correct' : 'wrong'
 			}))
+			if (response.is_correct) {
+				toast.success('Ответ засчитан')
+			} else {
+				toast.info('Ответ не засчитан')
+			}
 		} catch (error) {
 			const apiError = normalizeApiError(
 				error,
@@ -296,6 +303,7 @@ export default function HomePage() {
 	const handleResetDailyTest = () => {
 		setDailyAnswers({})
 		setDailyResults({})
+		toast.info('Ответы ежедневного теста сброшены')
 	}
 
 	return (

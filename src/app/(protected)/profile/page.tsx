@@ -397,6 +397,7 @@ export default function ProfilePage() {
 							onClick={() => {
 								TokenManager.clearTokens()
 								mutate(null, false)
+								toast.info('Вы вышли из аккаунта')
 								window.location.assign('/login')
 							}}
 						>
@@ -627,6 +628,7 @@ export default function ProfilePage() {
 								TokenManager.clearTokens()
 								localStorage.removeItem('oauth_is_new_user')
 								mutate(null, false)
+								toast.info('Вы вышли из аккаунта')
 								window.location.assign('/login')
 							}}
 						>

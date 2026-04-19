@@ -181,6 +181,7 @@ export default function RouteEnterprisePage() {
 			setUser(updatedUser)
 		} catch (err) {
 			console.error('Failed to reload route data', err)
+			toast.error('Не удалось обновить данные страницы')
 		}
 	}
 
@@ -203,6 +204,7 @@ export default function RouteEnterprisePage() {
 				)
 				setError(apiError.message)
 				setQuest(null)
+				toast.error(apiError.message)
 			} finally {
 				if (isMounted) setIsLoadingQuest(false)
 			}
@@ -224,6 +226,7 @@ export default function RouteEnterprisePage() {
 			} catch {
 				if (!isMounted) return
 				setUser(null)
+				toast.info('Войдите в аккаунт, чтобы видеть свой прогресс')
 			} finally {
 				if (isMounted) setIsLoadingUser(false)
 			}

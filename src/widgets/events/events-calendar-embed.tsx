@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, CircleAlert, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { getEvents, type CulturalEventDto } from '@/shared/api/events'
 import { normalizeApiError } from '@/shared/api/errors'
@@ -62,6 +63,7 @@ export function EventsCalendarEmbed({ enabled }: Props) {
 				'Не удалось загрузить события'
 			)
 			setError(apiError.message)
+			toast.error(apiError.message)
 		} finally {
 			setIsLoading(false)
 		}

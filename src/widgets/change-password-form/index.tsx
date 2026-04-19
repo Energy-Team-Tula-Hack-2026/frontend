@@ -80,7 +80,9 @@ export function ChangePasswordFormWidget() {
 			console.error(
 				'[v0] ChangePasswordFormWidget - User email is missing'
 			)
-			setSubmitError('Не удалось определить email пользователя')
+			const message = 'Не удалось определить email пользователя'
+			setSubmitError(message)
+			toast.error(message)
 			return
 		}
 
