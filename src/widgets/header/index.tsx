@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
 	BookOpenText,
+	Coins,
 	LayoutDashboard,
 	Menu,
 	ScrollText,
@@ -71,6 +72,9 @@ export function Header() {
 
 	const canSeeAdminPanel =
 		isOrganizationSession || canAccessAdminPanel(user?.role)
+	const availableBonuses = user?.statistic?.available_for_purchases ?? 0
+	const showBonuses =
+		isAuthenticated && !isLoading && !!user && !organizerOnly
 
 	return (
 		<header className="sticky top-0 z-40 border-b border-amber-900/10 bg-white/80 backdrop-blur-lg dark:border-zinc-700/70 dark:bg-zinc-950/80">
@@ -93,7 +97,7 @@ export function Header() {
 					</div>
 				</Link>
 
-				<nav className="hidden items-center gap-1 md:flex">
+				<nav className="hidden items-center gap-1 xl:flex">
 					{showNavSkeleton ? (
 						<div className="flex items-center gap-2">
 							<Skeleton className="h-9 w-24 rounded-xl" />
@@ -136,7 +140,7 @@ export function Header() {
 										variant: 'ghost',
 										size: 'icon'
 									}),
-									'md:hidden'
+									'xl:hidden'
 								)}
 							>
 								<Menu className="size-5" />
@@ -154,6 +158,17 @@ export function Header() {
 							</SheetHeader>
 
 							<nav className="flex flex-col gap-1 px-4 pb-4">
+								{showBonuses && (
+									<div className="mb-2 flex items-center justify-between rounded-xl border border-amber-200/70 bg-amber-50 px-3 py-3 text-sm dark:border-amber-800/40 dark:bg-amber-950/30">
+										<span className="text-muted-foreground">
+											Бонусы для покупок
+										</span>
+										<span className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-100">
+											<Coins className="size-4" />
+											{availableBonuses}
+										</span>
+									</div>
+								)}
 								{!showNavSkeleton &&
 									visibleNavLinks.map(
 										({ href, label, icon: Icon }) => {
@@ -202,10 +217,20 @@ export function Header() {
 									variant: 'ghost',
 									size: 'icon'
 								}),
-								'hidden md:inline-flex'
+								'hidden xl:inline-flex'
 							)}
 						>
 							<LayoutDashboard className="size-5" />
+						</Link>
+					)}
+					{showBonuses && (
+						<Link
+							href="/shop"
+							aria-label={`Бонусы для покупок: ${availableBonuses}`}
+							className="hidden h-9 items-center gap-2 rounded-xl border border-amber-200/70 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100 xl:inline-flex dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-900/40"
+						>
+							<Coins className="size-4" />
+							<span>{availableBonuses}</span>
 						</Link>
 					)}
 					<ThemeToggle />

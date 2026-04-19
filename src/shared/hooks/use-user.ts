@@ -36,7 +36,12 @@ export function useUser() {
 						role: 'organizer',
 						avatar_url: orgData.avatar_url,
 						description: orgData.description,
-						website_link: orgData.website_link
+						website_link: orgData.website_link,
+						statistic: {
+							quests_completed: 0,
+							score: 0,
+							available_for_purchases: 0
+						}
 					}
 					return normalizedOrgUser
 				}

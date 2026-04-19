@@ -2,30 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import {
-	ArrowRight,
-	BookOpenText,
-	Compass,
-	Sparkles,
-	Trophy
-} from 'lucide-react'
+import { BookOpenText, Compass, Sparkles, Trophy } from 'lucide-react'
 import { Badge } from '@/shared/components/ui/badge'
 import { Button } from '@/shared/components/ui/button'
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle
-} from '@/shared/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/shared/components/ui/card'
 import { Skeleton } from '@/shared/components/ui/skeleton'
-import {
-	Carousel,
-	CarouselContent,
-	CarouselItem,
-	CarouselNext,
-	CarouselPrevious
-} from '@/shared/components/ui/carousel'
 import {
 	getQuestCategories,
 	getQuests,
@@ -33,6 +14,7 @@ import {
 	type QuestDto
 } from '@/shared/api/quest'
 import { normalizeApiError } from '@/shared/api/errors'
+import { QuestCard } from '@/widgets/quest-card'
 import {
 	Select,
 	SelectContent,
@@ -191,115 +173,7 @@ export default function CraftsPage() {
 					!questsError &&
 					filteredQuests.length > 0
 						? filteredQuests.map((quest) => (
-								<Card
-									key={quest.id}
-									className="border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
-								>
-									{(() => {
-										const images = [
-											...(quest.images
-												?.map(
-													(image) => image.image_url
-												)
-												.filter((url): url is string =>
-													Boolean(url)
-												) ?? []),
-											...(quest.points
-												?.map(
-													(point) => point.image_url
-												)
-												.filter((url): url is string =>
-													Boolean(url)
-												) ?? [])
-										]
-										const uniqueImages = Array.from(
-											new Set(images)
-										)
-										const finalImages =
-											uniqueImages.length > 0
-												? uniqueImages
-												: ['/placeholder-logo.png']
-
-										return (
-											<div className="relative overflow-hidden rounded-t-xl border-b">
-												<Carousel className="w-full">
-													<CarouselContent className="-ml-0">
-														{finalImages.map(
-															(
-																imageUrl,
-																index
-															) => (
-																<CarouselItem
-																	key={`${quest.id}-${imageUrl}-${index}`}
-																	className="pl-0"
-																>
-																	<img
-																		src={
-																			imageUrl
-																		}
-																		alt={`${quest.name} — изображение ${index + 1}`}
-																		className="h-44 w-full object-cover"
-																	/>
-																</CarouselItem>
-															)
-														)}
-													</CarouselContent>
-													{finalImages.length > 1 && (
-														<>
-															<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
-															<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
-														</>
-													)}
-												</Carousel>
-											</div>
-										)
-									})()}
-									<CardHeader>
-										<CardTitle>{quest.name}</CardTitle>
-										<CardDescription>
-											{quest.description}
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-3">
-										<div className="flex items-center justify-between text-sm">
-											<span className="text-muted-foreground">
-												Уровень
-											</span>
-											<span className="font-medium">
-												{quest.level}
-											</span>
-										</div>
-										<div className="flex items-center justify-between text-sm">
-											<span className="text-muted-foreground">
-												Категория
-											</span>
-											<span className="font-medium">
-												{quest.category?.name ??
-													'Без категории'}
-											</span>
-										</div>
-										<div className="flex items-center justify-between text-sm">
-											<span className="text-muted-foreground">
-												Время
-											</span>
-											<span className="font-medium">
-												{quest.duration_min ?? 0} минут
-											</span>
-										</div>
-										<Link
-											href={`/routes/${quest.id}`}
-											className="block"
-										>
-											<Button
-												variant="ghost"
-												className="w-full justify-between"
-											>
-												Подробнее
-												<ArrowRight className="h-4 w-4" />
-											</Button>
-										</Link>
-									</CardContent>
-								</Card>
+								<QuestCard key={quest.id} quest={quest} />
 							))
 						: null}
 					{!isLoadingQuests &&

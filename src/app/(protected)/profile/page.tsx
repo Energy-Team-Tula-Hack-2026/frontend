@@ -129,25 +129,8 @@ export default function ProfilePage() {
 		activeQuestIds.includes(quest.id)
 	)
 
-	const totalEarnedPoints = useMemo(() => {
-		if (!user) return 0
-		const pointsMap = new Map(
-			quests
-				.flatMap((quest) => quest.points)
-				.map((point) => [point.id, point.score])
-		)
-		const pointsScore =
-			user.points
-				?.filter((point) => point.status === 'COMPLETED')
-				.reduce(
-					(sum, point) => sum + (pointsMap.get(point.point_id) || 0),
-					0
-				) || 0
-		const dailyScore =
-			user.daily_completes?.reduce((sum, item) => sum + item.score, 0) ||
-			0
-		return pointsScore + dailyScore
-	}, [quests, user])
+	const availableBonuses = user?.statistic?.available_for_purchases ?? 0
+	const totalEarnedBonuses = user?.statistic?.score ?? 0
 
 	const getInitials = (name: string, surname?: string) => {
 		const safeSurname = surname || name
@@ -341,6 +324,7 @@ export default function ProfilePage() {
 						</div>
 						<Button
 							variant="ghost"
+							className="w-full sm:w-auto"
 							onClick={() => {
 								TokenManager.clearTokens()
 								mutate(null, false)
@@ -439,8 +423,9 @@ export default function ProfilePage() {
 								</Button>
 							</div>
 						</div>
-						<div className="flex flex-wrap gap-2 pt-2">
+						<div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap">
 							<Button
+								className="w-full sm:w-auto"
 								onClick={handleOrganizationSave}
 								disabled={isSavingOrganization}
 							>
@@ -450,12 +435,14 @@ export default function ProfilePage() {
 							</Button>
 							<Button
 								variant="outline"
+								className="w-full sm:w-auto"
 								onClick={() => router.push('/change-password')}
 							>
 								Сменить пароль
 							</Button>
 							<Button
-								variant="destructive"
+								variant="outline"
+								className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:w-auto dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/30"
 								onClick={() => setIsDeleteDialogOpen(true)}
 							>
 								Удалить аккаунт
@@ -548,9 +535,10 @@ export default function ProfilePage() {
 							</Badge>
 						</div>
 					</div>
-					<div className="flex gap-2">
+					<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
 						<Button
 							variant="outline"
+							className="w-full sm:w-auto"
 							onClick={() => setIsEditing(true)}
 						>
 							<Pencil className="mr-2 h-4 w-4" />
@@ -558,12 +546,14 @@ export default function ProfilePage() {
 						</Button>
 						<Button
 							variant="outline"
+							className="w-full sm:w-auto"
 							onClick={() => router.push('/change-password')}
 						>
 							Сменить пароль
 						</Button>
 						<Button
 							variant="ghost"
+							className="w-full sm:w-auto"
 							onClick={() => {
 								TokenManager.clearTokens()
 								localStorage.removeItem('oauth_is_new_user')
@@ -575,7 +565,8 @@ export default function ProfilePage() {
 							Выйти
 						</Button>
 						<Button
-							variant="destructive"
+							variant="outline"
+							className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:w-auto dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/30"
 							onClick={() => setIsDeleteDialogOpen(true)}
 						>
 							Удалить аккаунт
@@ -584,14 +575,30 @@ export default function ProfilePage() {
 				</div>
 			</section>
 
-			<section className="grid gap-4 md:grid-cols-3">
+			<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				<Card>
 					<CardContent className="pt-6">
 						<p className="text-muted-foreground text-sm">
-							Всего баллов
+							Доступно для покупок
 						</p>
 						<p className="mt-1 text-2xl font-semibold">
-							{totalEarnedPoints}
+							{availableBonuses}
+						</p>
+						<p className="text-muted-foreground mt-2 text-xs">
+							10 бонусов = 1 ₽
+						</p>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardContent className="pt-6">
+						<p className="text-muted-foreground text-sm">
+							Заработано всего
+						</p>
+						<p className="mt-1 text-2xl font-semibold">
+							{totalEarnedBonuses}
+						</p>
+						<p className="text-muted-foreground mt-2 text-xs">
+							За все время
 						</p>
 					</CardContent>
 				</Card>

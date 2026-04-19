@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
+	Coins,
 	ExternalLink,
 	Loader2,
 	RefreshCw,
@@ -14,6 +15,7 @@ import {
 import { toast } from 'sonner'
 
 import { normalizeApiError } from '@/shared/api/errors'
+import { useUser } from '@/shared/hooks/use-user'
 import {
 	addShopItemToCart,
 	clearShopCart,
@@ -46,6 +48,7 @@ import {
 } from '@/shared/components/ui/dialog'
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
+import { Slider } from '@/shared/components/ui/slider'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import {
 	Tabs,
@@ -62,6 +65,7 @@ import {
 } from '@/shared/components/ui/carousel'
 
 const PLACEHOLDER_IMAGE = '/placeholder-logo.png'
+const BONUSES_PER_RUBLE = 10
 
 function formatPrice(price: number): string {
 	return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
@@ -87,7 +91,19 @@ function isPendingPurchase(purchase: ShopPurchaseDto): boolean {
 	return !purchase.confirmed && !purchase.is_cancelled
 }
 
+function getMaxUsableBonuses(
+	totalPrice: number,
+	availableBonuses: number
+): number {
+	const maxBonusesForPurchase = Math.max(
+		0,
+		Math.floor((totalPrice - 1) * BONUSES_PER_RUBLE)
+	)
+	return Math.min(availableBonuses, maxBonusesForPurchase)
+}
+
 export default function ShopPage() {
+	const { user, mutate: mutateUser } = useUser()
 	const [items, setItems] = useState<ShopItemDto[]>([])
 	const [cart, setCart] = useState<ShopCartItemDto[]>([])
 	const [purchases, setPurchases] = useState<ShopPurchaseDto[]>([])
@@ -103,6 +119,9 @@ export default function ShopPage() {
 	const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false)
 	const [buyItem, setBuyItem] = useState<ShopItemDto | null>(null)
 	const [buyQuantity, setBuyQuantity] = useState(1)
+	const [buyUsedBonuses, setBuyUsedBonuses] = useState(0)
+
+	const availableBonuses = user?.statistic?.available_for_purchases ?? 0
 
 	const filteredItems = useMemo(
 		() =>
@@ -122,6 +141,15 @@ export default function ShopPage() {
 			),
 		[cart]
 	)
+
+	const buyTotal = buyItem ? buyItem.price * Math.max(1, buyQuantity) : 0
+	const maxUsableBonuses = getMaxUsableBonuses(buyTotal, availableBonuses)
+	const normalizedBuyUsedBonuses = Math.min(
+		maxUsableBonuses,
+		Math.max(0, buyUsedBonuses)
+	)
+	const bonusDiscount = normalizedBuyUsedBonuses / BONUSES_PER_RUBLE
+	const buyPaymentAmount = Math.max(1, buyTotal - bonusDiscount)
 
 	const pendingPurchaseByItemId = useMemo(() => {
 		const map = new Map<string, ShopPurchaseDto>()
@@ -159,7 +187,17 @@ export default function ShopPage() {
 		void loadAll()
 	}, [])
 
-	const handleBuy = async (itemId: string, quantity: number) => {
+	useEffect(() => {
+		setBuyUsedBonuses((prev) =>
+			Math.min(getMaxUsableBonuses(buyTotal, availableBonuses), prev)
+		)
+	}, [availableBonuses, buyTotal])
+
+	const handleBuy = async (
+		itemId: string,
+		quantity: number,
+		usedBonuses = 0
+	) => {
 		const pendingPurchase = pendingPurchaseByItemId.get(itemId)
 		if (pendingPurchase?.confirmation_url) {
 			window.location.href = pendingPurchase.confirmation_url
@@ -188,6 +226,7 @@ export default function ShopPage() {
 			const result = await createShopPurchase({
 				item_id: itemId,
 				quantity,
+				used_bonuses: usedBonuses,
 				return_url: returnUrl
 			})
 
@@ -197,6 +236,7 @@ export default function ShopPage() {
 			}
 
 			toast.success('Покупка оформлена')
+			await mutateUser()
 			await loadAll()
 		} catch (error) {
 			const apiError = normalizeApiError(
@@ -231,6 +271,7 @@ export default function ShopPage() {
 	const openBuyDialog = (item: ShopItemDto) => {
 		setBuyItem(item)
 		setBuyQuantity(1)
+		setBuyUsedBonuses(0)
 		setIsBuyDialogOpen(true)
 	}
 
@@ -241,8 +282,13 @@ export default function ShopPage() {
 			max,
 			Math.max(1, Number.isFinite(buyQuantity) ? buyQuantity : 1)
 		)
+		const total = buyItem.price * normalizedQuantity
+		const normalizedUsedBonuses = Math.min(
+			getMaxUsableBonuses(total, availableBonuses),
+			Math.max(0, buyUsedBonuses)
+		)
 		setIsBuyDialogOpen(false)
-		await handleBuy(buyItem.id, normalizedQuantity)
+		await handleBuy(buyItem.id, normalizedQuantity, normalizedUsedBonuses)
 	}
 
 	return (
@@ -881,13 +927,31 @@ export default function ShopPage() {
 			<Dialog open={isBuyDialogOpen} onOpenChange={setIsBuyDialogOpen}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
-						<DialogTitle>Выбор количества</DialogTitle>
+						<DialogTitle>Оформление покупки</DialogTitle>
 						<DialogDescription>
-							Выберите сколько штук хотите купить перед оплатой.
+							Выберите количество и сколько бонусов использовать.
 						</DialogDescription>
 					</DialogHeader>
 					{buyItem ? (
 						<div className="space-y-4">
+							<div className="rounded-xl border border-amber-200/80 bg-amber-50 p-4 text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
+								<div className="flex items-start gap-3">
+									<div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
+										<Coins className="h-4 w-4" />
+									</div>
+									<div>
+										<p className="text-sm font-semibold">
+											Курс бонусов: 10 бонусов = 1 ₽
+										</p>
+										<p className="mt-1 text-xs text-amber-800/80 dark:text-amber-100/75">
+											Бонусами можно оплатить часть
+											покупки, но минимум 1 ₽ останется к
+											оплате.
+										</p>
+									</div>
+								</div>
+							</div>
+
 							<div>
 								<p className="font-medium">{buyItem.title}</p>
 								<p className="text-muted-foreground text-sm">
@@ -925,14 +989,69 @@ export default function ShopPage() {
 							</div>
 
 							<div className="rounded-lg border p-3 text-sm">
-								<span className="text-muted-foreground">
-									К оплате:{' '}
-								</span>
-								<span className="font-semibold">
-									{formatPrice(
-										buyItem.price * Math.max(1, buyQuantity)
-									)}
-								</span>
+								<div className="flex items-center justify-between gap-3">
+									<span className="text-muted-foreground">
+										Стоимость
+									</span>
+									<span className="font-semibold">
+										{formatPrice(buyTotal)}
+									</span>
+								</div>
+								<div className="mt-2 flex items-center justify-between gap-3">
+									<span className="text-muted-foreground">
+										Бонусами
+									</span>
+									<span className="font-semibold">
+										-{normalizedBuyUsedBonuses}
+									</span>
+								</div>
+								<div className="mt-2 flex items-center justify-between gap-3 border-t pt-2">
+									<span className="text-muted-foreground">
+										К оплате
+									</span>
+									<span className="font-semibold">
+										{formatPrice(buyPaymentAmount)}
+									</span>
+								</div>
+							</div>
+
+							<div className="space-y-3 rounded-lg border p-3">
+								<div className="flex items-center justify-between gap-3">
+									<div>
+										<p className="text-sm font-medium">
+											Оплата бонусами
+										</p>
+										<p className="text-muted-foreground text-xs">
+											Доступно: {availableBonuses}
+										</p>
+									</div>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										disabled={maxUsableBonuses === 0}
+										onClick={() =>
+											setBuyUsedBonuses(maxUsableBonuses)
+										}
+									>
+										<Coins className="mr-2 h-4 w-4" />
+										Оплатить бонусами
+									</Button>
+								</div>
+								<Slider
+									value={[normalizedBuyUsedBonuses]}
+									min={0}
+									max={Math.max(1, maxUsableBonuses)}
+									step={1}
+									disabled={maxUsableBonuses === 0}
+									onValueChange={(value) =>
+										setBuyUsedBonuses(value[0] ?? 0)
+									}
+								/>
+								<div className="text-muted-foreground flex items-center justify-between text-xs">
+									<span>0</span>
+									<span>{maxUsableBonuses}</span>
+								</div>
 							</div>
 
 							<div className="flex justify-end gap-2">

@@ -73,6 +73,11 @@ export type User = {
 	description?: string
 	website_link?: string
 	is_known_password?: boolean
+	statistic: {
+		quests_completed: number
+		score: number
+		available_for_purchases: number
+	}
 	accounts?: Array<{
 		id: string
 		account_type: string
