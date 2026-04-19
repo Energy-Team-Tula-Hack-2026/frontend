@@ -313,13 +313,6 @@ export default function ShopPage() {
 						<Link href="/seller">
 							<Button variant="outline">Страница продавца</Button>
 						</Link>
-						<Button
-							variant="outline"
-							onClick={() => void loadAll()}
-						>
-							<RefreshCw className="mr-2 h-4 w-4" />
-							Обновить
-						</Button>
 					</div>
 				</div>
 			</section>
