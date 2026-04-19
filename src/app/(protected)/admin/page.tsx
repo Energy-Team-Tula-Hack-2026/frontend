@@ -1150,7 +1150,7 @@ export default function AdminPage() {
 
 									<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 										<div className="grid gap-2">
-											<Label>Latitude</Label>
+											<Label>Широта</Label>
 											<Input
 												type="number"
 												step="any"
@@ -1175,7 +1175,7 @@ export default function AdminPage() {
 										</div>
 
 										<div className="grid gap-2">
-											<Label>Longitude</Label>
+											<Label>Долгота</Label>
 											<Input
 												type="number"
 												step="any"
@@ -1675,7 +1675,7 @@ export default function AdminPage() {
 
 								<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 									<div className="grid gap-2">
-										<Label>Latitude</Label>
+										<Label>Широта</Label>
 										<Input
 											type="number"
 											step="any"
@@ -1698,7 +1698,7 @@ export default function AdminPage() {
 									</div>
 
 									<div className="grid gap-2">
-										<Label>Longitude</Label>
+										<Label>Долгота</Label>
 										<Input
 											type="number"
 											step="any"

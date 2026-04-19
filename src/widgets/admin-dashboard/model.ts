@@ -166,8 +166,8 @@ export const validateQuestForm = (form: typeof questFormInitial) => {
 	if (!form.description.trim()) errors.description = 'Описание обязательно'
 	if (!form.categoryId) errors.categoryId = 'Выберите категорию'
 	if (!form.city.trim()) errors.city = 'Город обязателен'
-	if (!form.latitude.trim()) errors.latitude = 'Latitude обязательна'
-	if (!form.longitude.trim()) errors.longitude = 'Longitude обязательна'
+	if (!form.latitude.trim()) errors.latitude = 'Широта обязательна'
+	if (!form.longitude.trim()) errors.longitude = 'Долгота обязательна'
 	return errors
 }
 
