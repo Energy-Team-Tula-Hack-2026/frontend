@@ -441,8 +441,8 @@ export default function ProfilePage() {
 								Сменить пароль
 							</Button>
 							<Button
-								variant="destructive"
-								className="w-full sm:w-auto"
+								variant="outline"
+								className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:w-auto dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/30"
 								onClick={() => setIsDeleteDialogOpen(true)}
 							>
 								Удалить аккаунт
@@ -565,8 +565,8 @@ export default function ProfilePage() {
 							Выйти
 						</Button>
 						<Button
-							variant="destructive"
-							className="w-full sm:w-auto"
+							variant="outline"
+							className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:w-auto dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/30"
 							onClick={() => setIsDeleteDialogOpen(true)}
 						>
 							Удалить аккаунт
@@ -584,6 +584,9 @@ export default function ProfilePage() {
 						<p className="mt-1 text-2xl font-semibold">
 							{availableBonuses}
 						</p>
+						<p className="text-muted-foreground mt-2 text-xs">
+							10 бонусов = 1 ₽
+						</p>
 					</CardContent>
 				</Card>
 				<Card>
@@ -593,6 +596,9 @@ export default function ProfilePage() {
 						</p>
 						<p className="mt-1 text-2xl font-semibold">
 							{totalEarnedBonuses}
+						</p>
+						<p className="text-muted-foreground mt-2 text-xs">
+							За все время
 						</p>
 					</CardContent>
 				</Card>

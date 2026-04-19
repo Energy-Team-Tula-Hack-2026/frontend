@@ -97,7 +97,7 @@ export function Header() {
 					</div>
 				</Link>
 
-				<nav className="hidden items-center gap-1 lg:flex">
+				<nav className="hidden items-center gap-1 xl:flex">
 					{showNavSkeleton ? (
 						<div className="flex items-center gap-2">
 							<Skeleton className="h-9 w-24 rounded-xl" />
@@ -140,7 +140,7 @@ export function Header() {
 										variant: 'ghost',
 										size: 'icon'
 									}),
-									'lg:hidden'
+									'xl:hidden'
 								)}
 							>
 								<Menu className="size-5" />
@@ -217,7 +217,7 @@ export function Header() {
 									variant: 'ghost',
 									size: 'icon'
 								}),
-								'hidden lg:inline-flex'
+								'hidden xl:inline-flex'
 							)}
 						>
 							<LayoutDashboard className="size-5" />
@@ -227,7 +227,7 @@ export function Header() {
 						<Link
 							href="/shop"
 							aria-label={`Бонусы для покупок: ${availableBonuses}`}
-							className="hidden h-9 items-center gap-2 rounded-xl border border-amber-200/70 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100 lg:inline-flex dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-900/40"
+							className="hidden h-9 items-center gap-2 rounded-xl border border-amber-200/70 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100 xl:inline-flex dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-900/40"
 						>
 							<Coins className="size-4" />
 							<span>{availableBonuses}</span>

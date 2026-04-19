@@ -2624,7 +2624,7 @@ export default function AdminPage() {
 								}}
 							>
 								<DialogTrigger asChild>
-									<Button className="bg-gradient-to-r from-blue-500 to-purple-600">
+									<Button>
 										<Plus className="mr-2 h-4 w-4" />
 										Создать достижение
 									</Button>

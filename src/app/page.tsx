@@ -41,14 +41,8 @@ import {
 	registerUserQuest
 } from '@/shared/api/quest'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
+import { QuestCard } from '@/widgets/quest-card'
 import { CRAFT_PRODUCTS } from '@/shared/lib/craft-marketplace'
-import {
-	Carousel,
-	CarouselContent,
-	CarouselItem,
-	CarouselNext,
-	CarouselPrevious
-} from '@/shared/components/ui/carousel'
 
 const QUEST_START_ERROR_MESSAGE =
 	'Не получилось отсканировать и начать прохождение квеста предприятия'
@@ -305,100 +299,7 @@ export default function HomePage() {
 							</Card>
 						))}
 					{filteredQuests.map((quest) => (
-						<Card
-							key={quest.id}
-							className="h-full border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60"
-						>
-							{(() => {
-								const images = [
-									...(quest.images
-										?.map((image) => image.image_url)
-										.filter((url): url is string =>
-											Boolean(url)
-										) ?? []),
-									...(quest.points
-										?.map((point) => point.image_url)
-										.filter((url): url is string =>
-											Boolean(url)
-										) ?? [])
-								]
-								const uniqueImages = Array.from(new Set(images))
-								const finalImages =
-									uniqueImages.length > 0
-										? uniqueImages
-										: ['/placeholder-logo.png']
-
-								return (
-									<div className="relative overflow-hidden rounded-t-xl border-b">
-										<Carousel className="w-full">
-											<CarouselContent className="ml-0">
-												{finalImages.map(
-													(imageUrl, index) => (
-														<CarouselItem
-															key={`${quest.id}-${imageUrl}-${index}`}
-															className="pl-0"
-														>
-															<img
-																src={imageUrl}
-																alt={`${quest.name} — изображение ${index + 1}`}
-																className="h-40 w-full object-cover"
-															/>
-														</CarouselItem>
-													)
-												)}
-											</CarouselContent>
-											{finalImages.length > 1 && (
-												<>
-													<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
-													<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
-												</>
-											)}
-										</Carousel>
-									</div>
-								)
-							})()}
-							<CardHeader>
-								<CardTitle>{quest.name}</CardTitle>
-								<CardDescription>
-									{quest.description}
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="flex flex-1 flex-col gap-2 text-sm">
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">
-										Уровень
-									</span>
-									<span className="font-medium">
-										{quest.level}
-									</span>
-								</div>
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">
-										Категория
-									</span>
-									<span className="font-medium">
-										{quest.category?.name ??
-											'Без категории'}
-									</span>
-								</div>
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">
-										Время
-									</span>
-									<span className="font-medium">
-										{quest.duration_min ?? 0} минут
-									</span>
-								</div>
-								<Link
-									href={`/routes/${quest.id}`}
-									className="mt-auto inline-flex pt-2"
-								>
-									<Button variant="outline" size="sm">
-										Подробнее
-									</Button>
-								</Link>
-							</CardContent>
-						</Card>
+						<QuestCard key={quest.id} quest={quest} />
 					))}
 				</div>
 

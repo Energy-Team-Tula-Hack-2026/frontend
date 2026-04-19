@@ -72,6 +72,7 @@ export type ShopPurchaseDto = {
 export type ShopCreatePurchasePayload = {
 	item_id: string
 	quantity: number
+	used_bonuses: number
 	return_url: string
 }
 
