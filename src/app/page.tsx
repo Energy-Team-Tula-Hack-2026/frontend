@@ -4,14 +4,18 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
+	Brain,
 	CalendarDays,
+	CheckCircle2,
 	ChevronDown,
 	ChevronUp,
 	MapPin,
 	QrCode,
+	RotateCcw,
 	Search,
 	Sparkles,
-	Store
+	Store,
+	XCircle
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -49,12 +53,26 @@ import {
 	QuestDto,
 	registerUserQuest
 } from '@/shared/api/quest'
+import {
+	answerDailyQuestion,
+	getDailyQuestions,
+	getTodayDailyQuestions,
+	type DailyQuestionDto
+} from '@/shared/api/daily-questions'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import { QuestCard } from '@/widgets/quest-card'
 import { EventsCalendarEmbed } from '@/widgets/events/events-calendar-embed'
 
 const QUEST_START_ERROR_MESSAGE =
 	'Не получилось отсканировать и начать прохождение квеста предприятия'
+
+function getLocalDateIso(): string {
+	const now = new Date()
+	const year = now.getFullYear()
+	const month = String(now.getMonth() + 1).padStart(2, '0')
+	const day = String(now.getDate()).padStart(2, '0')
+	return `${year}-${month}-${day}`
+}
 
 export default function HomePage() {
 	const router = useRouter()
@@ -68,6 +86,21 @@ export default function HomePage() {
 	const [scanNotice, setScanNotice] = useState<string | null>(null)
 	const [isStartingQuest, setIsStartingQuest] = useState(false)
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+	const [isDailyTestOpen, setIsDailyTestOpen] = useState(false)
+	const [dailyDate, setDailyDate] = useState<string>(getLocalDateIso())
+	const [dailyQuestions, setDailyQuestions] = useState<DailyQuestionDto[]>([])
+	const [isLoadingDailyQuestions, setIsLoadingDailyQuestions] =
+		useState(false)
+	const [dailyQuestionsError, setDailyQuestionsError] = useState<
+		string | null
+	>(null)
+	const [dailyAnswers, setDailyAnswers] = useState<Record<string, string>>({})
+	const [dailyResults, setDailyResults] = useState<
+		Record<string, 'correct' | 'wrong'>
+	>({})
+	const [dailySubmittingQuestionId, setDailySubmittingQuestionId] = useState<
+		string | null
+	>(null)
 
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
@@ -107,6 +140,55 @@ export default function HomePage() {
 		}
 	}, [])
 
+	useEffect(() => {
+		setDailyAnswers({})
+		setDailyResults({})
+	}, [dailyDate, dailyQuestions.length])
+
+	useEffect(() => {
+		let isMounted = true
+
+		const loadDailyQuestions = async () => {
+			setIsLoadingDailyQuestions(true)
+			setDailyQuestionsError(null)
+			try {
+				const [todayData, allData] = await Promise.all([
+					getTodayDailyQuestions(),
+					getDailyQuestions()
+				])
+
+				if (!isMounted) return
+
+				const localDate = getLocalDateIso()
+				const dateFromAll =
+					allData.find((item) => item.date === localDate) ||
+					allData.find((item) => item.date === todayData.date)
+
+				setDailyDate(dateFromAll?.date || todayData.date || localDate)
+				setDailyQuestions(
+					dateFromAll?.questions?.length
+						? dateFromAll.questions
+						: todayData.questions || []
+				)
+			} catch (error) {
+				if (!isMounted) return
+				const apiError = normalizeApiError(
+					error,
+					'Не удалось загрузить ежедневные вопросы'
+				)
+				setDailyQuestionsError(apiError.message)
+				setDailyQuestions([])
+			} finally {
+				if (isMounted) setIsLoadingDailyQuestions(false)
+			}
+		}
+
+		loadDailyQuestions()
+		return () => {
+			isMounted = false
+		}
+	}, [])
+
 	const filteredQuests = useMemo(() => {
 		return quests.filter((quest) => {
 			const matchesSearch =
@@ -130,6 +212,11 @@ export default function HomePage() {
 			return matchesSearch && matchesLevel && matchesCategory
 		})
 	}, [quests, enterpriseSearch, enterpriseLevel, enterpriseCategory])
+	const totalDailyQuestions = dailyQuestions.length
+	const checkedDailyQuestionsCount = Object.keys(dailyResults).length
+	const passedDailyQuestionsCount = Object.values(dailyResults).filter(
+		(value) => value === 'correct'
+	).length
 
 	const handleQrCode = async (rawCode: string) => {
 		const normalizedCode = rawCode.trim().toUpperCase()
@@ -165,6 +252,50 @@ export default function HomePage() {
 		if (open) {
 			setScanNotice(null)
 		}
+	}
+
+	const handleSelectDailyAnswer = (questionId: string, optionId: string) => {
+		if (
+			dailyResults[questionId] ||
+			dailySubmittingQuestionId === questionId
+		)
+			return
+		setDailyAnswers((prev) => ({ ...prev, [questionId]: optionId }))
+	}
+
+	const handleCheckDailyAnswer = async (question: DailyQuestionDto) => {
+		const selectedOptionId = dailyAnswers[question.id]
+
+		if (!selectedOptionId) {
+			toast.error('Выберите вариант ответа')
+			return
+		}
+
+		setDailySubmittingQuestionId(question.id)
+		try {
+			const response = await answerDailyQuestion({
+				question_id: question.id,
+				user_answer: selectedOptionId
+			})
+
+			setDailyResults((prev) => ({
+				...prev,
+				[question.id]: response.is_correct ? 'correct' : 'wrong'
+			}))
+		} catch (error) {
+			const apiError = normalizeApiError(
+				error,
+				'Не удалось отправить ответ'
+			)
+			toast.error(apiError.message)
+		} finally {
+			setDailySubmittingQuestionId(null)
+		}
+	}
+
+	const handleResetDailyTest = () => {
+		setDailyAnswers({})
+		setDailyResults({})
 	}
 
 	return (
@@ -238,6 +369,180 @@ export default function HomePage() {
 				</Card>
 
 				<EventsCalendarEmbed enabled={isCalendarOpen} />
+			</section>
+
+			<section className="space-y-3">
+				<Card>
+					<CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+						<div className="flex items-center gap-2">
+							<Brain className="h-5 w-5 text-indigo-600" />
+							<div>
+								<p className="font-semibold">
+									Ежедневный тест от нейросети
+								</p>
+								<p className="text-muted-foreground text-sm">
+									Дата: {dailyDate}
+								</p>
+							</div>
+						</div>
+						<Button
+							variant="outline"
+							onClick={() => setIsDailyTestOpen((prev) => !prev)}
+						>
+							{isDailyTestOpen ? (
+								<>
+									<ChevronUp className="mr-2 h-4 w-4" />
+									Скрыть тест
+								</>
+							) : (
+								<>
+									<ChevronDown className="mr-2 h-4 w-4" />
+									Пройти тест
+								</>
+							)}
+						</Button>
+					</CardContent>
+				</Card>
+
+				{isDailyTestOpen && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="text-xl">
+								Проверка знаний
+							</CardTitle>
+							<CardDescription>
+								Вопрос засчитывается только при правильном
+								ответе.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="flex flex-wrap items-center gap-2">
+								<Badge variant="outline">
+									Проверено: {checkedDailyQuestionsCount}/
+									{totalDailyQuestions}
+								</Badge>
+								<Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+									Засчитано: {passedDailyQuestionsCount}
+								</Badge>
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									onClick={handleResetDailyTest}
+								>
+									<RotateCcw className="mr-2 h-4 w-4" />
+									Сбросить
+								</Button>
+							</div>
+
+							<div className="space-y-3">
+								{dailyQuestionsError && (
+									<p className="text-destructive text-sm">
+										{dailyQuestionsError}
+									</p>
+								)}
+								{isLoadingDailyQuestions && (
+									<div className="space-y-2">
+										{Array.from({ length: 3 }).map(
+											(_, index) => (
+												<Skeleton
+													key={`daily-question-skeleton-${index}`}
+													className="h-22 w-full"
+												/>
+											)
+										)}
+									</div>
+								)}
+								{!isLoadingDailyQuestions &&
+									dailyQuestions.length === 0 && (
+										<p className="text-muted-foreground text-sm">
+											На сегодня вопросов пока нет.
+										</p>
+									)}
+								{dailyQuestions.map((question, index) => {
+									const result = dailyResults[question.id]
+									return (
+										<Card key={question.id}>
+											<CardContent className="space-y-3 p-4">
+												<p className="font-medium">
+													{index + 1}.{' '}
+													{question.question}
+												</p>
+												<div className="grid gap-2">
+													{question.answer_options.map(
+														(option) => {
+															const isSelected =
+																dailyAnswers[
+																	question.id
+																] === option
+															return (
+																<Button
+																	key={option}
+																	type="button"
+																	variant="outline"
+																	className={`justify-start text-left whitespace-normal ${
+																		isSelected
+																			? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200'
+																			: ''
+																	}`}
+																	disabled={Boolean(
+																		result ||
+																		dailySubmittingQuestionId ===
+																			question.id
+																	)}
+																	onClick={() =>
+																		handleSelectDailyAnswer(
+																			question.id,
+																			option
+																		)
+																	}
+																>
+																	{option}
+																</Button>
+															)
+														}
+													)}
+												</div>
+
+												<div className="flex flex-wrap items-center gap-2">
+													<Button
+														type="button"
+														size="sm"
+														disabled={Boolean(
+															result ||
+															dailySubmittingQuestionId ===
+																question.id
+														)}
+														onClick={() =>
+															handleCheckDailyAnswer(
+																question
+															)
+														}
+													>
+														Проверить
+													</Button>
+													{result === 'correct' && (
+														<span className="inline-flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400">
+															<CheckCircle2 className="h-4 w-4" />
+															Ответ засчитан
+														</span>
+													)}
+													{result === 'wrong' && (
+														<span className="inline-flex items-center gap-1 text-sm text-rose-600 dark:text-rose-400">
+															<XCircle className="h-4 w-4" />
+															Неверно, не
+															засчитано
+														</span>
+													)}
+												</div>
+											</CardContent>
+										</Card>
+									)
+								})}
+							</div>
+						</CardContent>
+					</Card>
+				)}
 			</section>
 
 			<section className="space-y-4">
