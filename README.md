@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tula Hack 2026 Frontend
 
-## Getting Started
+Frontend для хакатона Tula Hack 2026 от команды Energy-Team.
 
-First, run the development server:
+---
+
+## 🌐 Задеплоенные компоненты
+
+| Сервис                            | URL                         |
+| --------------------------------- | --------------------------- |
+| **Frontend (Next.js приложение)** | https://energy-team-hack.ru |
+
+> 💡 **Совет:** Для полноценного тестирования используйте frontend вместе с развёрнутым API.
+
+---
+
+## 🛠 Технологии
+
+### Основные
+
+- **Next.js 16.2+** — React-фреймворк
+- **React 19+** — библиотека интерфейсов
+- **TypeScript** — типизация
+- **Tailwind CSS** — стилизация
+
+### Утилиты
+
+- **Prettier** — форматирование
+- **npm** — менеджер пакетов
+
+---
+
+## 🚀 Локальный запуск
+
+### Требования
+
+- **Node.js 22+**
+- **npm**
+
+---
+
+### Быстрый старт
+
+1. **Клонирование репозитория**
+
+```bash
+git clone https://github.com/Energy-Team-Tula-Hack-2026/frontend.git tula-hack-frontend
+cd tula-hack-frontend
+```
+
+2. **Установка зависимостей**
+
+```bash
+npm install
+```
+
+3. **Запуск dev-сервера**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. **Открытие приложения**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [http://localhost:3000](http://localhost:3000)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## ⚠️ Важные замечания
 
-To learn more about Next.js, take a look at the following resources:
+Frontend зависит от backend API.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Переменная            | Назначение      | Без неё не работает |
+| --------------------- | --------------- | ------------------- |
+| `NEXT_PUBLIC_API_URL` | URL backend API | Запросы к серверу   |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Пример `.env`
 
-## Deploy on Vercel
+```env
+NEXT_PUBLIC_API_URL=https://api.energy-team-hack.ru
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## ✅ Готовый frontend
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Сервис       | URL                                                        |
+| ------------ | ---------------------------------------------------------- |
+| **Frontend** | [https://energy-team-hack.ru](https://energy-team-hack.ru) |
+
+Backend для тестирования:
+
+- [https://api.energy-team-hack.ru/docs](https://api.energy-team-hack.ru/docs)
+
+---
+
+## 📝 Дополнительные команды
+
+```bash
+# запуск dev-сервера
+npm run dev
+
+# сборка production
+npm run build
+
+# запуск production-сборки
+npm run start
+```
