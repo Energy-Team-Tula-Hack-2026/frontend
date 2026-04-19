@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { BookOpenText, Compass, Sparkles, Trophy } from 'lucide-react'
+import {
+	BookOpenText,
+	Compass,
+	SlidersHorizontal,
+	Sparkles,
+	Trophy
+} from 'lucide-react'
 import { Badge } from '@/shared/components/ui/badge'
 import { Button } from '@/shared/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/components/ui/card'
@@ -109,34 +115,44 @@ export default function CraftsPage() {
 			</section>
 
 			<section className="mt-8 space-y-4">
-				<Card>
-					<CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_260px]">
-						<div>
-							<p className="text-muted-foreground text-sm">
-								Фильтр квестов по категории
-							</p>
+				<Card className="border-amber-100/80 bg-white/90 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/60">
+					<CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex min-w-0 items-center gap-3">
+							<div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-300">
+								<SlidersHorizontal className="h-4 w-4" />
+							</div>
+							<div className="min-w-0">
+								<p className="font-medium">
+									Квесты по категории
+								</p>
+								<p className="text-muted-foreground text-sm">
+									Найдено: {filteredQuests.length}
+								</p>
+							</div>
 						</div>
-						<Select
-							value={selectedCategoryId}
-							onValueChange={setSelectedCategoryId}
-						>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Категория" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">
-									Все категории
-								</SelectItem>
-								{questCategories.map((category) => (
-									<SelectItem
-										key={category.id}
-										value={category.id}
-									>
-										{category.name}
+						<div className="w-full sm:w-72">
+							<Select
+								value={selectedCategoryId}
+								onValueChange={setSelectedCategoryId}
+							>
+								<SelectTrigger className="bg-background/80 h-10 w-full border-amber-200 shadow-none dark:border-zinc-700">
+									<SelectValue placeholder="Категория" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">
+										Все категории
 									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+									{questCategories.map((category) => (
+										<SelectItem
+											key={category.id}
+											value={category.id}
+										>
+											{category.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 					</CardContent>
 				</Card>
 

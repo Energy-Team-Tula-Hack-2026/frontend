@@ -9,13 +9,10 @@ import {
 } from 'react-dadata'
 import 'react-dadata/dist/react-dadata.css'
 import {
-	Shield,
 	Plus,
 	Pencil,
 	Trash2,
 	MapPin,
-	QrCode,
-	Sparkles,
 	Loader2,
 	X,
 	Wand2,
@@ -31,14 +28,6 @@ import { Label } from '@/shared/components/ui/label'
 import { Input } from '@/shared/components/ui/input'
 import { Textarea } from '@/shared/components/ui/textarea'
 import { Badge } from '@/shared/components/ui/badge'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow
-} from '@/shared/components/ui/table'
 import {
 	Tabs,
 	TabsContent,
@@ -70,335 +59,37 @@ import {
 } from '@/shared/components/ui/card'
 import { getMe } from '@/shared/api/user'
 import { getOrganizationMe } from '@/shared/api/organization'
-import {
-	getQuests,
-	getQuestCategories,
-	type QuestDto,
-	type QuestCategory,
-	getQuestById
-} from '@/shared/api/quest'
+import { getQuests, getQuestCategories, getQuestById } from '@/shared/api/quest'
 import { TokenManager } from '@/shared/api/auth'
 import { normalizeApiError } from '@/shared/api/errors'
 import api from '@/shared/api/instance'
-
-const RULE_TYPE_OPTIONS = [
-	{ value: 'QUESTS_COMPLETED', label: 'Количество пройденных квестов' },
-	{ value: 'TOTAL_SCORE', label: 'Общее количество баллов' },
-	{
-		value: 'SPECIFIC_QUEST_COMPLETED',
-		label: 'Прохождение конкретного квеста'
-	},
-	{ value: 'POINTS_IN_QUEST', label: 'Баллы в конкретном квесте' }
-]
-
-const TOKEN_DADATA = '7fa5c82ac8fa16d77e74ea5f85254b13bf063e7d'
-
-type MeResponse = {
-	id?: string
-	name: string
-	surname?: string
-	email: string
-	role: 'user' | 'admin' | 'organizer'
-	avatar_url?: string
-}
-
-type Achievement = {
-	id: string
-	name: string
-	description: string
-	image_url: string
-	rule_type:
-		| 'QUESTS_COMPLETED'
-		| 'TOTAL_SCORE'
-		| 'SPECIFIC_QUEST_COMPLETED'
-		| 'POINTS_IN_QUEST'
-	rule_params: Record<string, any>
-}
-
-type QuestPoint = {
-	id: string
-	name: string
-	description: string
-	short_description?: string
-	score: number
-	priority: number
-	image_url?: string
-	audio_record_url?: string
-	latitude?: number
-	longitude?: number
-	code?: string
-}
-
-type UiQuest = {
-	id: string
-	title: string
-	description: string
-	category: string
-	categoryId?: string
-	cityName?: string | null
-	latitude?: number
-	longitude?: number
-	distance: number
-	duration: number
-	difficulty: 'easy' | 'medium' | 'hard'
-	points: number
-	images: string[]
-	withGuide: boolean
-	rating: number
-	reviewsCount: number
-	checkpointsCount: number
-	pointsData?: QuestPoint[]
-	guideData?: {
-		description: string
-		guide_name: string
-		group_link: string
-		planned_start: string
-		capacity: number
-	} | null
-}
-
-type CreateQuestRequest = {
-	name: string
-	description: string
-	category_id: string
-	latitude: number
-	longitude: number
-	city: string
-	duration_min: number
-	level: 'EASY' | 'MEDIUM' | 'HARD'
-}
-
-type UpdateQuestRequest = {
-	name: string
-	description: string
-	category_id: string
-	latitude: number
-	longitude: number
-	city: string
-	duration_min: number
-	level: 'EASY' | 'MEDIUM' | 'HARD'
-}
-
-type CreatePointRequest = {
-	name: string
-	description: string
-	short_description?: string
-	score: number
-	priority: number
-	image_url?: string
-	audio_record_url?: string
-	latitude?: number
-	longitude?: number
-}
-
-type UpdatePointRequest = {
-	name: string
-	description: string
-	short_description?: string
-	score: number
-}
-
-type CreateAchievementRequest = {
-	name: string
-	description: string
-	image_url: string
-	rule_type:
-		| 'QUESTS_COMPLETED'
-		| 'TOTAL_SCORE'
-		| 'SPECIFIC_QUEST_COMPLETED'
-		| 'POINTS_IN_QUEST'
-	rule_params: Record<string, any>
-}
-
-const questFormInitial = {
-	title: '',
-	description: '',
-	categoryId: '',
-	city: '',
-	latitude: '',
-	longitude: '',
-	difficulty: 'EASY' as 'EASY' | 'MEDIUM' | 'HARD',
-	duration: '60',
-	distance: '3',
-	withGuide: false,
-	guideDescription: '',
-	guideName: '',
-	groupLink: '',
-	plannedStart: '',
-	capacity: '10'
-}
-
-const pointFormInitial = {
-	name: '',
-	description: '',
-	shortDescription: '',
-	score: '100',
-	priority: '0',
-	latitude: '',
-	longitude: ''
-}
-
-const achievementFormInitial = {
-	name: '',
-	description: '',
-	image_url: '',
-	rule_type: 'QUESTS_COMPLETED' as
-		| 'QUESTS_COMPLETED'
-		| 'TOTAL_SCORE'
-		| 'SPECIFIC_QUEST_COMPLETED'
-		| 'POINTS_IN_QUEST',
-	rule_params: { threshold: 10, quest_id: '' } as Record<string, any>
-}
-
-interface ValidationErrors {
-	[key: string]: string
-}
-
-const validateQuestForm = (form: typeof questFormInitial) => {
-	const errors: ValidationErrors = {}
-	if (!form.title.trim()) errors.title = 'Название обязательно'
-	if (!form.description.trim()) errors.description = 'Описание обязательно'
-	if (!form.categoryId) errors.categoryId = 'Выберите категорию'
-	if (!form.city.trim()) errors.city = 'Город обязателен'
-	if (!form.latitude.trim()) errors.latitude = 'Latitude обязательна'
-	if (!form.longitude.trim()) errors.longitude = 'Longitude обязательна'
-	return errors
-}
-
-const validatePointForm = (form: typeof pointFormInitial) => {
-	const errors: ValidationErrors = {}
-	if (!form.name.trim()) errors.name = 'Название точки обязательно'
-	if (!form.description.trim()) {
-		errors.description = 'Описание точки обязательно'
-	}
-	return errors
-}
-
-const validateAchievementForm = (form: typeof achievementFormInitial) => {
-	const errors: ValidationErrors = {}
-	if (!form.name.trim()) errors.name = 'Название обязательно'
-	if (!form.description.trim()) errors.description = 'Описание обязательно'
-	if (!form.rule_params.threshold || form.rule_params.threshold <= 0) {
-		errors.threshold = 'Пороговое значение должно быть больше 0'
-	}
-	if (
-		(form.rule_type === 'SPECIFIC_QUEST_COMPLETED' ||
-			form.rule_type === 'POINTS_IN_QUEST') &&
-		!form.rule_params.quest_id
-	) {
-		errors.quest_id = 'Выберите квест'
-	}
-	return errors
-}
-
-function mapQuestToUi(quest: QuestDto): UiQuest {
-	const difficultyMap: Record<QuestDto['level'], UiQuest['difficulty']> = {
-		EASY: 'easy',
-		MEDIUM: 'medium',
-		HARD: 'hard'
-	}
-
-	const feedbacks = quest.feedbacks ?? []
-	const reviewsCount = feedbacks.length
-
-	const rating =
-		reviewsCount > 0
-			? Number(
-					(
-						feedbacks.reduce((sum, item) => sum + item.score, 0) /
-						reviewsCount
-					).toFixed(1)
-				)
-			: 0
-
-	const totalPoints =
-		quest.points?.reduce((sum, point) => sum + (point.score ?? 0), 0) ?? 0
-	const images =
-		quest.images?.map((item) => item.image_url).filter(Boolean) ?? []
-	const checkpointsCount = quest.points?.length ?? 0
-
-	const pointsData =
-		quest.points?.map((point) => ({
-			id: point.id,
-			name: point.name,
-			description: point.description,
-			short_description: point.short_description,
-			score: point.score ?? 0,
-			priority: point.priority ?? 0,
-			image_url: point.image_url || undefined,
-			audio_record_url: point.audio_record_url || undefined,
-			latitude: point.latitude,
-			longitude: point.longitude,
-			code: point.code
-		})) ?? []
-
-	const guideData = quest.quest_planning
-		? {
-				description: quest.quest_planning.description,
-				guide_name: quest.quest_planning.guide_name,
-				group_link: quest.quest_planning.group_link,
-				planned_start: quest.quest_planning.planned_start,
-				capacity: quest.quest_planning.capacity
-			}
-		: null
-
-	return {
-		id: quest.id,
-		title: quest.name,
-		description: quest.description,
-		category: quest.category?.name ?? 'Без категории',
-		categoryId: quest.category?.id,
-		cityName: quest.location?.city,
-		latitude: quest.location?.latitude,
-		longitude: quest.location?.longitude,
-		distance: Number(((quest.length_metres ?? 0) / 1000).toFixed(1)),
-		duration: quest.duration_min,
-		difficulty: difficultyMap[quest.level] ?? 'easy',
-		points: totalPoints,
-		images,
-		withGuide: Boolean(quest.quest_planning),
-		rating,
-		reviewsCount,
-		checkpointsCount,
-		pointsData,
-		guideData
-	}
-}
-
-function cityToSuggestion(
-	cityName?: string
-): DaDataSuggestion<DaDataAddress> | undefined {
-	if (!cityName) return undefined
-
-	return {
-		value: cityName,
-		unrestricted_value: cityName,
-		data: {
-			city: cityName
-		} as DaDataAddress
-	}
-}
-
-function extractQuestOwnerId(quest: QuestDto): string | null {
-	const candidate = quest as QuestDto & {
-		organization_id?: string
-		owner_id?: string
-		created_by?: string
-		created_by_id?: string
-		organization?: { id?: string }
-		owner?: { id?: string }
-	}
-
-	return (
-		candidate.organization_id ||
-		candidate.owner_id ||
-		candidate.created_by ||
-		candidate.created_by_id ||
-		candidate.organization?.id ||
-		candidate.owner?.id ||
-		null
-	)
-}
+import {
+	RULE_TYPE_OPTIONS,
+	TOKEN_DADATA,
+	achievementFormInitial,
+	cityToSuggestion,
+	extractQuestOwnerId,
+	mapQuestToUi,
+	pointFormInitial,
+	questFormInitial,
+	validateAchievementForm,
+	validatePointForm,
+	validateQuestForm,
+	type Achievement,
+	type CreateAchievementRequest,
+	type CreatePointRequest,
+	type CreateQuestRequest,
+	type MeResponse,
+	type QuestCategory,
+	type QuestPoint,
+	type UiQuest,
+	type UpdatePointRequest,
+	type UpdateQuestRequest,
+	type ValidationErrors
+} from '@/widgets/admin-dashboard/model'
+import { AdminHeader } from '@/widgets/admin-dashboard/admin-header'
+import { AdminStats } from '@/widgets/admin-dashboard/admin-stats'
+import { QuestsTable } from '@/widgets/admin-dashboard/quests-table'
 
 export default function AdminPage() {
 	const router = useRouter()
@@ -452,9 +143,7 @@ export default function AdminPage() {
 
 	const [pointForm, setPointForm] = useState({ ...pointFormInitial })
 	const [pointFormErrors, setPointFormErrors] = useState<ValidationErrors>({})
-	const [pointImageFile, setPointImageFile] = useState<File | null>(null)
 	const [pointAudioFile, setPointAudioFile] = useState<File | null>(null)
-	const [pointImagePreview, setPointImagePreview] = useState('')
 	const [pointAudioPreview, setPointAudioPreview] = useState('')
 	const [isGeneratingPointDescription, setIsGeneratingPointDescription] =
 		useState(false)
@@ -725,7 +414,6 @@ export default function AdminPage() {
 
 	const handleEditQuest = (quest: UiQuest) => {
 		setEditingQuest(quest)
-		console.log('Editing quest:', quest)
 
 		const cityValue = quest.cityName || ''
 
@@ -818,28 +506,6 @@ export default function AdminPage() {
 		}
 	}
 
-	const handleDeleteQuest = async (id: string) => {
-		if (
-			!confirm(
-				'Вы уверены, что хотите удалить этот маршрут? Это действие нельзя отменить.'
-			)
-		) {
-			return
-		}
-
-		try {
-			await api.delete(`/api/v2/quest/${id}`)
-			toast.success('Маршрут удален')
-			await loadQuests()
-		} catch (error) {
-			const apiError = normalizeApiError(
-				error,
-				'Не удалось удалить маршрут'
-			)
-			toast.error(apiError.message)
-		}
-	}
-
 	const handleCreatePoint = async () => {
 		if (!selectedQuest) return
 
@@ -856,14 +522,7 @@ export default function AdminPage() {
 				name: pointForm.name,
 				description: pointForm.description,
 				short_description: pointForm.shortDescription || undefined,
-				score: Number(pointForm.score),
-				priority: Number(pointForm.priority),
-				latitude: pointForm.latitude
-					? Number(pointForm.latitude)
-					: undefined,
-				longitude: pointForm.longitude
-					? Number(pointForm.longitude)
-					: undefined
+				priority: Number(pointForm.priority)
 			}
 
 			const createPointResponse = await api.post(
@@ -873,13 +532,6 @@ export default function AdminPage() {
 
 			const createdPointId: string | undefined =
 				createPointResponse.data?.[0]?.id
-
-			if (createdPointId && pointImageFile) {
-				const imageUrl = await uploadFile(pointImageFile, 'photo')
-				await api.put(`/api/v2/quest/point/${createdPointId}/image`, {
-					image_url: imageUrl
-				})
-			}
 
 			if (createdPointId && pointAudioFile) {
 				const audioUrl = await uploadFile(pointAudioFile, 'audio')
@@ -915,9 +567,7 @@ export default function AdminPage() {
 			longitude: point.longitude?.toString() || ''
 		})
 		setPointFormErrors({})
-		setPointImageFile(null)
 		setPointAudioFile(null)
-		setPointImagePreview(point.image_url || '')
 		setPointAudioPreview(point.audio_record_url || '')
 		setIsEditPointDialogOpen(true)
 	}
@@ -934,13 +584,6 @@ export default function AdminPage() {
 
 		setIsSubmittingPoint(true)
 		try {
-			if (pointImageFile) {
-				const newImageUrl = await uploadFile(pointImageFile, 'photo')
-				await api.put(`/api/v2/quest/point/${editingPoint.id}/image`, {
-					image_url: newImageUrl
-				})
-			}
-
 			if (pointAudioFile) {
 				const newAudioUrl = await uploadFile(pointAudioFile, 'audio')
 				await api.put(`/api/v2/quest/point/${editingPoint.id}/audio`, {
@@ -951,8 +594,7 @@ export default function AdminPage() {
 			const updateData: UpdatePointRequest = {
 				name: pointForm.name,
 				description: pointForm.description,
-				short_description: pointForm.shortDescription || undefined,
-				score: Number(pointForm.score)
+				short_description: pointForm.shortDescription || undefined
 			}
 
 			await api.patch(
@@ -995,27 +637,6 @@ export default function AdminPage() {
 			const apiError = normalizeApiError(
 				error,
 				'Не удалось удалить точку'
-			)
-			toast.error(apiError.message)
-		}
-	}
-
-	const handleDeletePointImage = async () => {
-		if (!editingPoint) return
-		try {
-			await api.delete(`/api/v2/quest/point/${editingPoint.id}/image`)
-			setEditingPoint({
-				...editingPoint,
-				image_url: undefined
-			})
-			setPointImageFile(null)
-			setPointImagePreview('')
-			toast.success('Изображение точки удалено')
-			await loadQuests()
-		} catch (error) {
-			const apiError = normalizeApiError(
-				error,
-				'Не удалось удалить изображение точки'
 			)
 			toast.error(apiError.message)
 		}
@@ -1147,9 +768,7 @@ export default function AdminPage() {
 	const resetPointForm = () => {
 		setPointForm({ ...pointFormInitial })
 		setPointFormErrors({})
-		setPointImageFile(null)
 		setPointAudioFile(null)
-		setPointImagePreview('')
 		setPointAudioPreview('')
 		setEditingPoint(null)
 	}
@@ -1253,105 +872,11 @@ export default function AdminPage() {
 
 	if (!isAuthorized) return null
 
-	console.log('Form', questForm)
-
 	return (
 		<div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-			<div className="mb-8 flex items-center justify-between">
-				<div>
-					<div className="mb-2 flex items-center space-x-3">
-						<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
-							<Shield className="h-6 w-6 text-white" />
-						</div>
-						<div>
-							<h1 className="text-foreground text-3xl font-bold">
-								{isOrganizerSession
-									? 'Дашборд организатора'
-									: 'Панель администратора'}
-							</h1>
-							<p className="text-muted-foreground">
-								{isOrganizerSession
-									? 'Управление квестами и точками'
-									: 'Управление квестами, точками и достижениями'}
-							</p>
-						</div>
-					</div>
-				</div>
-			</div>
+			<AdminHeader isOrganizerSession={isOrganizerSession} />
 
-			<div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
-				<Card>
-					<CardContent className="pt-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-muted-foreground mb-1 text-sm">
-									Всего квестов
-								</p>
-								<p className="text-foreground text-2xl font-bold">
-									{stats.totalQuests}
-								</p>
-							</div>
-							<div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950">
-								<MapPin className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardContent className="pt-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-muted-foreground mb-1 text-sm">
-									Контрольных точек
-								</p>
-								<p className="text-foreground text-2xl font-bold">
-									{stats.totalPoints}
-								</p>
-							</div>
-							<div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-950">
-								<QrCode className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardContent className="pt-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-muted-foreground mb-1 text-sm">
-									Средний рейтинг
-								</p>
-								<p className="text-foreground text-2xl font-bold">
-									{stats.avgRating}
-								</p>
-							</div>
-							<div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-950">
-								<Sparkles className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardContent className="pt-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="text-muted-foreground mb-1 text-sm">
-									Достижений
-								</p>
-								<p className="text-foreground text-2xl font-bold">
-									{stats.totalAchievements}
-								</p>
-							</div>
-							<div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
-								<Trophy className="h-6 w-6 text-green-600 dark:text-green-400" />
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+			<AdminStats stats={stats} />
 
 			<Tabs
 				value={activeTab}
@@ -2475,138 +2000,15 @@ export default function AdminPage() {
 						</DialogContent>
 					</Dialog>
 
-					<Card>
-						<CardContent className="overflow-x-auto p-0">
-							{isLoadingQuests ? (
-								<div className="flex justify-center py-12">
-									<Loader2 className="h-8 w-8 animate-spin" />
-								</div>
-							) : quests.length === 0 ? (
-								<div className="text-muted-foreground py-12 text-center">
-									Нет маршрутов
-								</div>
-							) : (
-								<div className="min-w-[800px]">
-									<Table>
-										<TableHeader>
-											<TableRow>
-												<TableHead className="w-[250px]">
-													Название
-												</TableHead>
-												<TableHead>Категория</TableHead>
-												<TableHead>Сложность</TableHead>
-												<TableHead>Точек</TableHead>
-												<TableHead>Рейтинг</TableHead>
-												<TableHead className="text-right">
-													Действия
-												</TableHead>
-											</TableRow>
-										</TableHeader>
-
-										<TableBody>
-											{quests.map((quest) => (
-												<TableRow key={quest.id}>
-													<TableCell className="font-medium">
-														<div className="flex items-center space-x-3">
-															{quest.images[0] ? (
-																<img
-																	src={
-																		quest
-																			.images[0]
-																	}
-																	className="h-10 w-10 flex-shrink-0 rounded object-cover"
-																	alt=""
-																/>
-															) : (
-																<div className="bg-muted h-10 w-10 flex-shrink-0 rounded" />
-															)}
-															<span className="break-words">
-																{quest.title}
-															</span>
-														</div>
-													</TableCell>
-													<TableCell>
-														{quest.category}
-													</TableCell>
-													<TableCell>
-														<Badge
-															variant="outline"
-															className={
-																quest.difficulty ===
-																'easy'
-																	? 'bg-green-50 text-green-700'
-																	: quest.difficulty ===
-																		  'medium'
-																		? 'bg-yellow-50 text-yellow-700'
-																		: 'bg-red-50 text-red-700'
-															}
-														>
-															{quest.difficulty ===
-															'easy'
-																? 'Легко'
-																: quest.difficulty ===
-																	  'medium'
-																	? 'Средне'
-																	: 'Сложно'}
-														</Badge>
-													</TableCell>
-													<TableCell>
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={() => {
-																setSelectedQuest(
-																	quest
-																)
-																setIsPointsDialogOpen(
-																	true
-																)
-															}}
-														>
-															{
-																quest.checkpointsCount
-															}{' '}
-															точек
-														</Button>
-													</TableCell>
-													<TableCell>
-														{quest.rating} (
-														{quest.reviewsCount})
-													</TableCell>
-													<TableCell className="text-right">
-														<div className="flex justify-end space-x-1">
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() =>
-																	handleEditQuest(
-																		quest
-																	)
-																}
-															>
-																<Pencil className="h-4 w-4" />
-															</Button>
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() =>
-																	handleDeleteQuest(
-																		quest.id
-																	)
-																}
-															>
-																<Trash2 className="h-4 w-4 text-red-500" />
-															</Button>
-														</div>
-													</TableCell>
-												</TableRow>
-											))}
-										</TableBody>
-									</Table>
-								</div>
-							)}
-						</CardContent>
-					</Card>
+					<QuestsTable
+						quests={quests}
+						isLoadingQuests={isLoadingQuests}
+						onEditQuest={handleEditQuest}
+						onOpenPoints={(quest) => {
+							setSelectedQuest(quest)
+							setIsPointsDialogOpen(true)
+						}}
+					/>
 				</TabsContent>
 
 				{!isOrganizerSession && (
@@ -3459,82 +2861,6 @@ export default function AdminPage() {
 									/>
 								</div>
 
-								<div className="grid grid-cols-2 gap-3">
-									<div className="сol-span-2 grid gap-1">
-										<Label className="text-xs">Баллы</Label>
-										<Input
-											type="number"
-											value={pointForm.score}
-											onChange={(e) =>
-												setPointForm((prev) => ({
-													...prev,
-													score: e.target.value
-												}))
-											}
-										/>
-									</div>
-								</div>
-
-								<div className="grid grid-cols-2 gap-3">
-									<div className="grid gap-1">
-										<Label className="text-xs">
-											Широта
-										</Label>
-										<Input
-											placeholder="54.6295"
-											value={pointForm.latitude}
-											onChange={(e) =>
-												setPointForm((prev) => ({
-													...prev,
-													latitude: e.target.value
-												}))
-											}
-										/>
-									</div>
-
-									<div className="grid gap-1">
-										<Label className="text-xs">
-											Долгота
-										</Label>
-										<Input
-											placeholder="39.7421"
-											value={pointForm.longitude}
-											onChange={(e) =>
-												setPointForm((prev) => ({
-													...prev,
-													longitude: e.target.value
-												}))
-											}
-										/>
-									</div>
-								</div>
-
-								<div className="grid gap-1">
-									<Label className="text-xs">
-										Изображение
-									</Label>
-									<Input
-										type="file"
-										accept="image/*"
-										onChange={(e) => {
-											const file = e.target.files?.[0]
-											if (file) {
-												setPointImageFile(file)
-												setPointImagePreview(
-													URL.createObjectURL(file)
-												)
-											}
-										}}
-									/>
-									{pointImagePreview && (
-										<img
-											src={pointImagePreview}
-											className="h-24 w-full rounded object-cover"
-											alt=""
-										/>
-									)}
-								</div>
-
 								<div className="grid gap-1">
 									<Label className="text-xs">Аудио</Label>
 									<Input
@@ -3593,7 +2919,7 @@ export default function AdminPage() {
 				open={isEditPointDialogOpen}
 				onOpenChange={setIsEditPointDialogOpen}
 			>
-				<DialogContent className="max-w-2xl">
+				<DialogContent className="flex max-h-[90vh] max-w-2xl flex-col overflow-hidden">
 					<DialogHeader>
 						<DialogTitle>Редактирование точки</DialogTitle>
 						<DialogDescription>
@@ -3601,7 +2927,7 @@ export default function AdminPage() {
 						</DialogDescription>
 					</DialogHeader>
 
-					<div className="grid gap-4 py-4">
+					<div className="-mx-1 grid flex-1 gap-4 overflow-y-auto px-1 py-4">
 						{renderField(
 							'Название точки *',
 							'name',
@@ -3682,102 +3008,6 @@ export default function AdminPage() {
 							/>
 						</div>
 
-						<div className="grid grid-cols-2 gap-3">
-							<div className="grid gap-1">
-								<Label className="text-xs">Баллы</Label>
-								<Input
-									type="number"
-									value={pointForm.score}
-									onChange={(e) =>
-										setPointForm((prev) => ({
-											...prev,
-											score: e.target.value
-										}))
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid grid-cols-2 gap-3">
-							<div className="grid gap-1">
-								<Label className="text-xs">Широта</Label>
-								<Input
-									placeholder="54.6295"
-									value={pointForm.latitude}
-									onChange={(e) =>
-										setPointForm((prev) => ({
-											...prev,
-											latitude: e.target.value
-										}))
-									}
-								/>
-							</div>
-
-							<div className="grid gap-1">
-								<Label className="text-xs">Долгота</Label>
-								<Input
-									placeholder="39.7421"
-									value={pointForm.longitude}
-									onChange={(e) =>
-										setPointForm((prev) => ({
-											...prev,
-											longitude: e.target.value
-										}))
-									}
-								/>
-							</div>
-						</div>
-
-						<div className="grid gap-1">
-							<Label className="text-xs">
-								Текущее изображение
-							</Label>
-							{editingPoint?.image_url && (
-								<div className="space-y-2">
-									<img
-										src={editingPoint.image_url}
-										className="h-32 w-full rounded object-cover"
-										alt=""
-									/>
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										onClick={handleDeletePointImage}
-									>
-										<Trash2 className="mr-1 h-3 w-3" />
-										Удалить изображение
-									</Button>
-								</div>
-							)}
-						</div>
-
-						<div className="grid gap-1">
-							<Label className="text-xs">
-								Заменить изображение
-							</Label>
-							<Input
-								type="file"
-								accept="image/*"
-								onChange={(e) => {
-									const file = e.target.files?.[0]
-									if (file) {
-										setPointImageFile(file)
-										setPointImagePreview(
-											URL.createObjectURL(file)
-										)
-									}
-								}}
-							/>
-							{pointImagePreview && (
-								<img
-									src={pointImagePreview}
-									className="mt-1 h-24 w-full rounded object-cover"
-									alt=""
-								/>
-							)}
-						</div>
-
 						<div className="grid gap-1">
 							<Label className="text-xs">Текущее аудио</Label>
 							{editingPoint?.audio_record_url && (
@@ -3823,7 +3053,7 @@ export default function AdminPage() {
 						</div>
 					</div>
 
-					<DialogFooter>
+					<DialogFooter className="border-t pt-4">
 						<Button
 							variant="outline"
 							onClick={() => setIsEditPointDialogOpen(false)}
