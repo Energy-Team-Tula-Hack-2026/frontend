@@ -283,7 +283,7 @@ export default function SellerPage() {
 
 	return (
 		<div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
-			<section className="rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-8 dark:border-amber-900/50 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/30">
+			<section className="rounded-3xl border border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 p-8 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
 				<Badge className="mb-3 w-fit bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">
 					<Store className="mr-1 h-3.5 w-3.5" />
 					Кабинет продавца
