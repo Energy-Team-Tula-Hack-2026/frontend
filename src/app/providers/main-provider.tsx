@@ -2,6 +2,7 @@ import { type PropsWithChildren } from 'react'
 
 import { ThemeProvider } from './theme-provider'
 import { TanstackQueryProvider } from './tanstack-query-provider'
+import { ToastProvider } from './toast-provider'
 
 export const MainProvider = ({ children }: PropsWithChildren<unknown>) => (
 	<TanstackQueryProvider>
@@ -11,6 +12,7 @@ export const MainProvider = ({ children }: PropsWithChildren<unknown>) => (
 			enableSystem
 			disableTransitionOnChange
 		>
+			<ToastProvider />
 			{children}
 		</ThemeProvider>
 	</TanstackQueryProvider>

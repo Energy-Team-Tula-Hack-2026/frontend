@@ -217,6 +217,7 @@ export default function ShopPage() {
 
 		if (!isAuthenticated) {
 			setIsLoading(false)
+			toast.info('Войдите в аккаунт, чтобы открыть магазин')
 			router.replace('/login?next=/shop')
 			return
 		}
@@ -237,6 +238,7 @@ export default function ShopPage() {
 	) => {
 		const pendingPurchase = pendingPurchaseByItemId.get(itemId)
 		if (pendingPurchase?.confirmation_url) {
+			toast.info('Продолжаем оплату покупки')
 			window.location.href = pendingPurchase.confirmation_url
 			return
 		}
@@ -268,6 +270,7 @@ export default function ShopPage() {
 			})
 
 			if (result.payment_url) {
+				toast.info('Переходим к оплате')
 				window.location.href = result.payment_url
 				return
 			}
@@ -310,6 +313,7 @@ export default function ShopPage() {
 		setBuyQuantity(1)
 		setBuyUsedBonuses(0)
 		setIsBuyDialogOpen(true)
+		toast.info('Выберите количество и бонусы для оплаты')
 	}
 
 	const confirmBuyWithSelectedQuantity = async () => {
@@ -523,6 +527,9 @@ export default function ShopPage() {
 														setCart(
 															await getShopCart()
 														)
+														toast.success(
+															'Количество товара обновлено'
+														)
 													} catch (error) {
 														const apiError =
 															normalizeApiError(
@@ -564,6 +571,9 @@ export default function ShopPage() {
 														)
 														setCart(
 															await getShopCart()
+														)
+														toast.success(
+															'Количество товара обновлено'
 														)
 													} catch (error) {
 														const apiError =
@@ -621,6 +631,9 @@ export default function ShopPage() {
 														)
 														setCart(
 															await getShopCart()
+														)
+														toast.success(
+															'Товар удален из корзины'
 														)
 													} catch (error) {
 														const apiError =

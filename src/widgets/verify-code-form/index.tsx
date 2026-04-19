@@ -79,12 +79,16 @@ export function VerifyCodeFormWidget() {
 		if (isLoading) return
 
 		if (code.length !== CODE_LENGTH) {
-			setError('Введите полный код')
+			const message = 'Введите полный код'
+			setError(message)
+			toast.error(message)
 			return
 		}
 
 		if (!email) {
-			setError('Не найден email для подтверждения')
+			const message = 'Не найден email для подтверждения'
+			setError(message)
+			toast.error(message)
 			return
 		}
 
@@ -140,7 +144,9 @@ export function VerifyCodeFormWidget() {
 				isOrganizationPasswordFlow) &&
 			!email
 		) {
-			setError('Не найден email для повторной отправки')
+			const message = 'Не найден email для повторной отправки'
+			setError(message)
+			toast.error(message)
 			return
 		}
 

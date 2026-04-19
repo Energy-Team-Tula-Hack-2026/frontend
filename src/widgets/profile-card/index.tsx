@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { LogOut, Pencil } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/shared/components/ui/button'
 import {
@@ -46,6 +47,7 @@ export function ProfileCardWidget({
 		localStorage.removeItem('oauth_is_new_user')
 
 		console.log('[v0] ProfileCardWidget - Redirecting to /login')
+		toast.info('Вы вышли из аккаунта')
 		window.location.assign('/login')
 	}
 
