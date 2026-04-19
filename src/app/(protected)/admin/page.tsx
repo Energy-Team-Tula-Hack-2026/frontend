@@ -191,10 +191,7 @@ export default function AdminPage() {
 								? user.id || null
 								: null
 						),
-						loadCategories(),
-						...(authMethod === 'organization'
-							? []
-							: [loadAchievements()])
+						loadCategories()
 					])
 				} else {
 					toast.error(
@@ -853,8 +850,7 @@ export default function AdminPage() {
 			? (
 					quests.reduce((sum, q) => sum + q.rating, 0) / quests.length
 				).toFixed(1)
-			: '0',
-		totalAchievements: achievements.length
+			: '0'
 	}
 
 	if (isLoading) {
@@ -883,19 +879,11 @@ export default function AdminPage() {
 				onValueChange={setActiveTab}
 				className="w-full"
 			>
-				<TabsList
-					className={`mb-6 grid w-full ${isOrganizerSession ? 'grid-cols-1' : 'grid-cols-2'}`}
-				>
+				<TabsList className="mb-6 grid w-full grid-cols-1">
 					<TabsTrigger value="quests">
 						<MapPin className="mr-2 h-4 w-4" />
 						Квесты
 					</TabsTrigger>
-					{!isOrganizerSession && (
-						<TabsTrigger value="achievements">
-							<Trophy className="mr-2 h-4 w-4" />
-							Достижения
-						</TabsTrigger>
-					)}
 				</TabsList>
 
 				<TabsContent value="quests" className="space-y-6">

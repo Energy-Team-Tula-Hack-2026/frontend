@@ -1,4 +1,4 @@
-import { MapPin, QrCode, Sparkles, Trophy } from 'lucide-react'
+import { MapPin, QrCode, Sparkles } from 'lucide-react'
 import { Card, CardContent } from '@/shared/components/ui/card'
 
 type AdminStatsProps = {
@@ -6,13 +6,12 @@ type AdminStatsProps = {
 		totalQuests: number
 		totalPoints: number
 		avgRating: string
-		totalAchievements: number
 	}
 }
 
 export function AdminStats({ stats }: AdminStatsProps) {
 	return (
-		<div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
+		<div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
 			<Card>
 				<CardContent className="pt-6">
 					<div className="flex items-center justify-between">
@@ -62,24 +61,6 @@ export function AdminStats({ stats }: AdminStatsProps) {
 						</div>
 						<div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-950">
 							<Sparkles className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
-						</div>
-					</div>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardContent className="pt-6">
-					<div className="flex items-center justify-between">
-						<div>
-							<p className="text-muted-foreground mb-1 text-sm">
-								Достижений
-							</p>
-							<p className="text-foreground text-2xl font-bold">
-								{stats.totalAchievements}
-							</p>
-						</div>
-						<div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
-							<Trophy className="h-6 w-6 text-green-600 dark:text-green-400" />
 						</div>
 					</div>
 				</CardContent>
