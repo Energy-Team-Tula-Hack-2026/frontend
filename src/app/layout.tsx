@@ -54,9 +54,9 @@ export default function RootLayout({
 							<nav className="flex items-center justify-center gap-4 text-xs md:justify-end">
 								<Link
 									className="text-muted-foreground hover:text-foreground transition-colors"
-									href="/crafts"
+									href="/"
 								>
-									Ремесла
+									Квесты
 								</Link>
 								<Link
 									className="text-muted-foreground hover:text-foreground transition-colors"

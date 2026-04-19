@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-	BookOpenText,
 	Coins,
 	LayoutDashboard,
 	Menu,
@@ -36,7 +35,7 @@ import {
 import { Skeleton } from '@/shared/components/ui/skeleton'
 
 const navLinks = [
-	{ href: '/crafts', label: 'Ремесла', icon: BookOpenText },
+	{ href: '/', label: 'Квесты', icon: ScrollText },
 	{ href: '/leader-board', label: 'Рейтинг', icon: Trophy },
 	{ href: '/shop', label: 'Маркет', icon: ShoppingBag },
 	{ href: '/profile', label: 'Профиль', icon: User }

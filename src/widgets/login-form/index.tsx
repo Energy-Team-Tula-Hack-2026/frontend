@@ -36,7 +36,6 @@ import {
 
 import { login, getOAuthUrl, TokenManager } from '@/shared/api/auth'
 import { loginOrganization } from '@/shared/api/organization'
-import { normalizeApiError } from '@/shared/api/errors'
 
 const loginSchema = z.object({
 	email: z.string().email('Введите корректный email'),
@@ -44,6 +43,7 @@ const loginSchema = z.object({
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
+const LOGIN_ERROR_MESSAGE = 'Не удалось войти. Проверьте email и пароль.'
 
 export function LoginFormWidget() {
 	const searchParams = useSearchParams()
@@ -96,13 +96,9 @@ export function LoginFormWidget() {
 					? nextParam!
 					: fallbackPath
 			)
-		} catch (err: unknown) {
-			const apiError = normalizeApiError(
-				err,
-				'Ошибка авторизации. Проверьте email и пароль.'
-			)
-			setError(apiError.message)
-			toast.error(apiError.message)
+		} catch {
+			setError(LOGIN_ERROR_MESSAGE)
+			toast.error(LOGIN_ERROR_MESSAGE)
 		} finally {
 			setIsLoading(false)
 		}

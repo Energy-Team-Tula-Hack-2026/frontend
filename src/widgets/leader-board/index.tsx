@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
 	Avatar,
 	AvatarFallback,
@@ -15,7 +16,10 @@ import {
 	CardTitle
 } from '@/shared/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs'
-import { getLeaderBoardStatistic } from '@/shared/api/statistic'
+import {
+	getLeaderBoardStatistic,
+	type LeaderboardPeriod
+} from '@/shared/api/statistic'
 import { normalizeApiError } from '@/shared/api/errors'
 import {
 	Crown,
@@ -53,46 +57,29 @@ type UiLeaderboardEntry = {
 // Дефолтный URL аватарки
 const DEFAULT_AVATAR = '/user.jpg'
 
-// Маппинг периодов для API
-const periodMap = {
+const periodMap: Record<'week' | 'month' | 'all', LeaderboardPeriod> = {
 	week: 'WEAKLY',
 	month: 'MONTLY',
 	all: 'ALLTIME'
 }
 
+const LEADERBOARD_CACHE_TIME = 10 * 60 * 1000
+
 export const LeaderBoardWidget = () => {
 	const [period, setPeriod] = useState<'week' | 'month' | 'all'>('all')
-	const [leaderboardData, setLeaderboardData] = useState<
-		UserLeaderboardEntry[]
-	>([])
-	const [isLoading, setIsLoading] = useState(true)
-	const [error, setError] = useState<string | null>(null)
 	const [currentPage, setCurrentPage] = useState(1)
 	const itemsPerPage = 10
+	const leaderboardPeriod = periodMap[period]
 
-	useEffect(() => {
-		const loadLeaderboard = async () => {
-			setIsLoading(true)
-			setError(null)
-			setCurrentPage(1) // Сбрасываем страницу при смене периода
+	const { data, isLoading, error, refetch } = useQuery({
+		queryKey: ['leaderboard', leaderboardPeriod],
+		queryFn: () => getLeaderBoardStatistic(leaderboardPeriod),
+		staleTime: LEADERBOARD_CACHE_TIME,
+		gcTime: LEADERBOARD_CACHE_TIME,
+		placeholderData: keepPreviousData
+	})
 
-			try {
-				const data = await getLeaderBoardStatistic()
-				setLeaderboardData(data.users)
-			} catch (error) {
-				const apiError = normalizeApiError(
-					error,
-					'Не удалось загрузить таблицу лидеров'
-				)
-				setError(apiError.message)
-				setLeaderboardData([])
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		loadLeaderboard()
-	}, [period])
+	const leaderboardData = data?.users ?? []
 
 	const leaderboardEntries = useMemo<UiLeaderboardEntry[]>(() => {
 		const sorted = [...leaderboardData].sort((a, b) => {
@@ -205,15 +192,22 @@ export const LeaderBoardWidget = () => {
 	}
 
 	if (error) {
+		const apiError = normalizeApiError(
+			error,
+			'Не удалось загрузить таблицу лидеров'
+		)
+
 		return (
 			<div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center dark:border-red-900 dark:bg-red-950/30">
 				<Trophy className="mx-auto mb-3 h-12 w-12 text-red-500 dark:text-red-400" />
 				<h3 className="mb-2 text-lg font-semibold text-red-800 dark:text-red-200">
 					Не удалось загрузить рейтинг
 				</h3>
-				<p className="text-red-600 dark:text-red-300">{error}</p>
+				<p className="text-red-600 dark:text-red-300">
+					{apiError.message}
+				</p>
 				<button
-					onClick={() => window.location.reload()}
+					onClick={() => refetch()}
 					className="mt-4 rounded-lg bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900"
 				>
 					Попробовать снова
@@ -259,7 +253,10 @@ export const LeaderBoardWidget = () => {
 			{/* Tabs для выбора периода */}
 			<Tabs
 				value={period}
-				onValueChange={(v) => setPeriod(v as typeof period)}
+				onValueChange={(v) => {
+					setPeriod(v as typeof period)
+					setCurrentPage(1)
+				}}
 				className="mb-6"
 			>
 				<TabsList className="mx-auto grid w-full max-w-md grid-cols-3">

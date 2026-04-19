@@ -1,14 +1,14 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
 	Coins,
 	ExternalLink,
 	Loader2,
 	RefreshCw,
 	Search,
-	ShoppingCart,
 	Sparkles,
 	Trash2
 } from 'lucide-react'
@@ -63,28 +63,17 @@ import {
 	CarouselNext,
 	CarouselPrevious
 } from '@/shared/components/ui/carousel'
+import {
+	formatShopPrice,
+	getShopItemImages,
+	ShopItemCard
+} from '@/widgets/shop-item-card'
 
 const PLACEHOLDER_IMAGE = '/placeholder-logo.png'
 const BONUSES_PER_RUBLE = 10
 
-function formatPrice(price: number): string {
-	return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
-}
-
 function getImage(url?: string | null): string {
 	return url || PLACEHOLDER_IMAGE
-}
-
-function getItemImages(item?: ShopItemDto | null): string[] {
-	if (!item) return [PLACEHOLDER_IMAGE]
-
-	const imageUrls = [
-		...(item.images?.map((image) => image.image_url).filter(Boolean) ?? []),
-		...(item.image_url ? [item.image_url] : [])
-	]
-
-	const unique = Array.from(new Set(imageUrls))
-	return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE]
 }
 
 function isPendingPurchase(purchase: ShopPurchaseDto): boolean {
@@ -103,7 +92,13 @@ function getMaxUsableBonuses(
 }
 
 export default function ShopPage() {
-	const { user, mutate: mutateUser } = useUser()
+	const router = useRouter()
+	const {
+		user,
+		isLoading: isUserLoading,
+		isAuthenticated,
+		mutate: mutateUser
+	} = useUser()
 	const [items, setItems] = useState<ShopItemDto[]>([])
 	const [cart, setCart] = useState<ShopCartItemDto[]>([])
 	const [purchases, setPurchases] = useState<ShopPurchaseDto[]>([])
@@ -184,8 +179,18 @@ export default function ShopPage() {
 	}
 
 	useEffect(() => {
+		if (isUserLoading) {
+			return
+		}
+
+		if (!isAuthenticated) {
+			setIsLoading(false)
+			router.replace('/login?next=/shop')
+			return
+		}
+
 		void loadAll()
-	}, [])
+	}, [isAuthenticated, isUserLoading, router])
 
 	useEffect(() => {
 		setBuyUsedBonuses((prev) =>
@@ -291,11 +296,15 @@ export default function ShopPage() {
 		await handleBuy(buyItem.id, normalizedQuantity, normalizedUsedBonuses)
 	}
 
+	if (!isUserLoading && !isAuthenticated) {
+		return null
+	}
+
 	return (
 		<div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
-			<section className="relative overflow-hidden rounded-3xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-8 dark:border-emerald-900/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-cyan-950/20">
+			<section className="relative overflow-hidden rounded-3xl border border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 p-8 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
 				<div className="relative">
-					<Badge className="mb-3 w-fit bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100">
+					<Badge className="mb-3 w-fit bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">
 						<Sparkles className="mr-1 h-3.5 w-3.5" />
 						Магазин ремесел
 					</Badge>
@@ -307,8 +316,8 @@ export default function ShopPage() {
 						оплату в один клик.
 					</p>
 					<div className="mt-4 flex flex-wrap gap-2">
-						<Link href="/crafts">
-							<Button variant="outline">К ремеслам</Button>
+						<Link href="/">
+							<Button variant="outline">К квестам</Button>
 						</Link>
 						<Link href="/seller">
 							<Button variant="outline">Страница продавца</Button>
@@ -358,152 +367,47 @@ export default function ShopPage() {
 					) : (
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
 							{filteredItems.map((item) => {
-								const isOutOfStock = item.quantity < 1
 								const canContinuePayment = Boolean(
 									pendingPurchaseByItemId.get(item.id)
 										?.confirmation_url
 								)
-								const itemImages = getItemImages(item)
 								return (
-									<Card
+									<ShopItemCard
 										key={item.id}
-										className="overflow-hidden"
-									>
-										<div className="relative overflow-hidden border-b">
-											<Carousel className="w-full">
-												<CarouselContent className="-ml-0">
-													{itemImages.map(
-														(imageUrl, index) => (
-															<CarouselItem
-																key={`${item.id}-${imageUrl}-${index}`}
-																className="pl-0"
-															>
-																<img
-																	src={getImage(
-																		imageUrl
-																	)}
-																	alt={`${item.title} - фото ${index + 1}`}
-																	className="h-44 w-full object-cover"
-																	onError={(
-																		event
-																	) => {
-																		event.currentTarget.src =
-																			PLACEHOLDER_IMAGE
-																	}}
-																/>
-															</CarouselItem>
-														)
-													)}
-												</CarouselContent>
-												{itemImages.length > 1 && (
-													<>
-														<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
-														<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
-													</>
-												)}
-											</Carousel>
-										</div>
-										<CardHeader>
-											<CardTitle className="line-clamp-1 text-lg">
-												{item.title}
-											</CardTitle>
-											<CardDescription className="line-clamp-2">
-												{item.description}
-											</CardDescription>
-										</CardHeader>
-										<CardContent className="space-y-3">
-											<div className="flex items-center justify-between text-sm">
-												<span className="text-muted-foreground">
-													В наличии: {item.quantity}
-												</span>
-												<span className="font-semibold">
-													{formatPrice(item.price)}
-												</span>
-											</div>
-											<div className="grid grid-cols-2 gap-2">
-												<Button
-													variant="outline"
-													onClick={() =>
-														void openDetails(
-															item.id
-														)
-													}
-												>
-													Подробнее
-												</Button>
-												<Button
-													onClick={async () => {
-														setBusyItemId(item.id)
-														try {
-															await addShopItemToCart(
-																{
-																	item_id:
-																		item.id,
-																	quantity: 1
-																}
-															)
-															toast.success(
-																'Товар добавлен в корзину'
-															)
-															setCart(
-																await getShopCart()
-															)
-														} catch (error) {
-															const apiError =
-																normalizeApiError(
-																	error,
-																	'Не удалось добавить в корзину'
-																)
-															toast.error(
-																apiError.message
-															)
-														} finally {
-															setBusyItemId(null)
-														}
-													}}
-													disabled={
-														isOutOfStock ||
-														busyItemId === item.id
-													}
-												>
-													{busyItemId === item.id ? (
-														<Loader2 className="h-4 w-4 animate-spin" />
-													) : (
-														<ShoppingCart className="mr-2 h-4 w-4" />
-													)}
-													В корзину
-												</Button>
-											</div>
-											<Button
-												className="w-full"
-												variant={
-													isOutOfStock &&
-													!canContinuePayment
-														? 'outline'
-														: 'secondary'
-												}
-												onClick={() =>
-													canContinuePayment
-														? void handleBuy(
-																item.id,
-																1
-															)
-														: openBuyDialog(item)
-												}
-												disabled={
-													(isOutOfStock &&
-														!canContinuePayment) ||
-													busyItemId === item.id
-												}
-											>
-												{canContinuePayment
-													? 'Закончить оплату'
-													: isOutOfStock
-														? 'Нет в наличии'
-														: 'Купить сейчас'}
-											</Button>
-										</CardContent>
-									</Card>
+										item={item}
+										isBusy={busyItemId === item.id}
+										canContinuePayment={canContinuePayment}
+										onDetails={(itemId) =>
+											void openDetails(itemId)
+										}
+										onAddToCart={async (shopItem) => {
+											setBusyItemId(shopItem.id)
+											try {
+												await addShopItemToCart({
+													item_id: shopItem.id,
+													quantity: 1
+												})
+												toast.success(
+													'Товар добавлен в корзину'
+												)
+												setCart(await getShopCart())
+											} catch (error) {
+												const apiError =
+													normalizeApiError(
+														error,
+														'Не удалось добавить в корзину'
+													)
+												toast.error(apiError.message)
+											} finally {
+												setBusyItemId(null)
+											}
+										}}
+										onBuy={(shopItem) =>
+											canContinuePayment
+												? void handleBuy(shopItem.id, 1)
+												: openBuyDialog(shopItem)
+										}
+									/>
 								)
 							})}
 						</div>
@@ -515,7 +419,7 @@ export default function ShopPage() {
 						<CardHeader>
 							<CardTitle>Корзина</CardTitle>
 							<CardDescription>
-								Сумма: {formatPrice(cartTotal)}
+								Сумма: {formatShopPrice(cartTotal)}
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-3">
@@ -549,8 +453,10 @@ export default function ShopPage() {
 												{line.item.title}
 											</p>
 											<p className="text-muted-foreground text-sm">
-												{formatPrice(line.item.price)} x{' '}
-												{line.quantity}
+												{formatShopPrice(
+													line.item.price
+												)}{' '}
+												x {line.quantity}
 											</p>
 											{isOutOfStock &&
 												!canContinuePayment && (
@@ -774,7 +680,8 @@ export default function ShopPage() {
 										</Badge>
 									</div>
 									<p className="text-muted-foreground mt-1">
-										Сумма: {formatPrice(purchase.amount)}
+										Сумма:{' '}
+										{formatShopPrice(purchase.amount)}
 									</p>
 									{isPendingPurchase(purchase) &&
 										purchase.confirmation_url && (
@@ -812,7 +719,7 @@ export default function ShopPage() {
 							<div className="relative overflow-hidden rounded-lg border">
 								<Carousel className="w-full">
 									<CarouselContent className="-ml-0">
-										{getItemImages(activeItem).map(
+										{getShopItemImages(activeItem).map(
 											(imageUrl, index) => (
 												<CarouselItem
 													key={`${activeItem.id}-${imageUrl}-${index}`}
@@ -831,7 +738,8 @@ export default function ShopPage() {
 											)
 										)}
 									</CarouselContent>
-									{getItemImages(activeItem).length > 1 && (
+									{getShopItemImages(activeItem).length >
+										1 && (
 										<>
 											<CarouselPrevious className="top-1/2 left-3 -translate-y-1/2 border-white/80 bg-white/85" />
 											<CarouselNext className="top-1/2 right-3 -translate-y-1/2 border-white/80 bg-white/85" />
@@ -850,7 +758,7 @@ export default function ShopPage() {
 									В наличии: {activeItem.quantity}
 								</p>
 								<p className="text-lg font-semibold">
-									{formatPrice(activeItem.price)}
+									{formatShopPrice(activeItem.price)}
 								</p>
 								<div className="flex flex-wrap gap-2">
 									{(() => {
@@ -987,7 +895,7 @@ export default function ShopPage() {
 										Стоимость
 									</span>
 									<span className="font-semibold">
-										{formatPrice(buyTotal)}
+										{formatShopPrice(buyTotal)}
 									</span>
 								</div>
 								<div className="mt-2 flex items-center justify-between gap-3">
@@ -1003,7 +911,7 @@ export default function ShopPage() {
 										К оплате
 									</span>
 									<span className="font-semibold">
-										{formatPrice(buyPaymentAmount)}
+										{formatShopPrice(buyPaymentAmount)}
 									</span>
 								</div>
 							</div>
