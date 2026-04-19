@@ -818,28 +818,6 @@ export default function AdminPage() {
 		}
 	}
 
-	const handleDeleteQuest = async (id: string) => {
-		if (
-			!confirm(
-				'Вы уверены, что хотите удалить этот маршрут? Это действие нельзя отменить.'
-			)
-		) {
-			return
-		}
-
-		try {
-			await api.delete(`/api/v2/quest/${id}`)
-			toast.success('Маршрут удален')
-			await loadQuests()
-		} catch (error) {
-			const apiError = normalizeApiError(
-				error,
-				'Не удалось удалить маршрут'
-			)
-			toast.error(apiError.message)
-		}
-	}
-
 	const handleCreatePoint = async () => {
 		if (!selectedQuest) return
 
@@ -2585,17 +2563,6 @@ export default function AdminPage() {
 																}
 															>
 																<Pencil className="h-4 w-4" />
-															</Button>
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() =>
-																	handleDeleteQuest(
-																		quest.id
-																	)
-																}
-															>
-																<Trash2 className="h-4 w-4 text-red-500" />
 															</Button>
 														</div>
 													</TableCell>
