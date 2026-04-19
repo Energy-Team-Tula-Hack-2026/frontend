@@ -40,7 +40,11 @@ export function QuestCard({ quest }: { quest: QuestDto }) {
 	return (
 		<Card className="h-full border-amber-100/80 bg-white/80 shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/60">
 			<div className="relative overflow-hidden rounded-t-xl border-b">
-				<Carousel className="w-full">
+				<Carousel
+					className="w-full"
+					autoplay={images.length > 1}
+					autoplayInterval={3200}
+				>
 					<CarouselContent className="ml-0">
 						{images.map((imageUrl, index) => (
 							<CarouselItem

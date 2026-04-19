@@ -19,6 +19,9 @@ type CarouselProps = {
 	plugins?: CarouselPlugin
 	orientation?: 'horizontal' | 'vertical'
 	setApi?: (api: CarouselApi) => void
+	autoplay?: boolean
+	autoplayInterval?: number
+	pauseOnHover?: boolean
 }
 
 type CarouselContextProps = {
@@ -47,8 +50,13 @@ function Carousel({
 	opts,
 	setApi,
 	plugins,
+	autoplay = false,
+	autoplayInterval = 3500,
+	pauseOnHover = true,
 	className,
 	children,
+	onMouseEnter,
+	onMouseLeave,
 	...props
 }: React.ComponentProps<'div'> & CarouselProps) {
 	const [carouselRef, api] = useEmblaCarousel(
@@ -60,6 +68,7 @@ function Carousel({
 	)
 	const [canScrollPrev, setCanScrollPrev] = React.useState(false)
 	const [canScrollNext, setCanScrollNext] = React.useState(false)
+	const [isPaused, setIsPaused] = React.useState(false)
 
 	const onSelect = React.useCallback((api: CarouselApi) => {
 		if (!api) return
@@ -104,6 +113,21 @@ function Carousel({
 		}
 	}, [api, onSelect])
 
+	React.useEffect(() => {
+		if (!api || !autoplay || isPaused) return
+
+		const timer = window.setInterval(() => {
+			if (api.canScrollNext()) {
+				api.scrollNext()
+				return
+			}
+
+			api.scrollTo(0)
+		}, autoplayInterval)
+
+		return () => window.clearInterval(timer)
+	}, [api, autoplay, autoplayInterval, isPaused])
+
 	return (
 		<CarouselContext.Provider
 			value={{
@@ -121,6 +145,18 @@ function Carousel({
 		>
 			<div
 				onKeyDownCapture={handleKeyDown}
+				onMouseEnter={(event) => {
+					if (pauseOnHover) {
+						setIsPaused(true)
+					}
+					onMouseEnter?.(event)
+				}}
+				onMouseLeave={(event) => {
+					if (pauseOnHover) {
+						setIsPaused(false)
+					}
+					onMouseLeave?.(event)
+				}}
 				className={cn('relative', className)}
 				role="region"
 				aria-roledescription="carousel"

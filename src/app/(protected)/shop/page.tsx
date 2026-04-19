@@ -717,7 +717,13 @@ export default function ShopPage() {
 					) : activeItem ? (
 						<div className="grid gap-4 md:grid-cols-[240px_1fr]">
 							<div className="relative overflow-hidden rounded-lg border">
-								<Carousel className="w-full">
+								<Carousel
+									className="w-full"
+									autoplay={
+										getShopItemImages(activeItem).length > 1
+									}
+									autoplayInterval={3200}
+								>
 									<CarouselContent className="-ml-0">
 										{getShopItemImages(activeItem).map(
 											(imageUrl, index) => (
