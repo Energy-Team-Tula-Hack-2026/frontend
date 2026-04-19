@@ -12,7 +12,8 @@ import {
 	PartyPopper,
 	QrCode,
 	Route,
-	Sparkles
+	Sparkles,
+	Star
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -167,7 +168,10 @@ export function Quest() {
 		notFound()
 	}
 
-	const totalScore = sortedPoints.reduce((sum, point) => sum + point.score, 0)
+	const questRating =
+		typeof quest.rating === 'number'
+			? quest.rating.toFixed(1)
+			: 'Нет рейтинга'
 	const completedPointIds = progress.completedPointIds.filter((pointId) =>
 		sortedPoints.some((point) => point.id === pointId)
 	)
@@ -271,7 +275,10 @@ export function Quest() {
 					<Badge variant="secondary">
 						{quest.points.length} точек
 					</Badge>
-					<Badge variant="secondary">{totalScore} баллов</Badge>
+					<Badge variant="secondary">
+						<Star className="mr-1 h-3 w-3 fill-current" />
+						{questRating}
+					</Badge>
 				</div>
 			</div>
 

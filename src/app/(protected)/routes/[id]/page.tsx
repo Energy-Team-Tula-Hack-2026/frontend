@@ -251,12 +251,7 @@ export default function RouteEnterprisePage() {
 
 	const hasUserQuest = Boolean(currentUserQuest)
 
-	const canLeaveFeedback = useMemo(
-		() =>
-			userQuestStatus === 'IN_PROGRESS' ||
-			userQuestStatus === 'COMPLETED',
-		[userQuestStatus]
-	)
+	const canLeaveFeedback = hasUserQuest
 
 	const userFeedback = useMemo(() => {
 		if (!user?.id || !quest?.feedbacks?.length) return null
@@ -343,7 +338,7 @@ export default function RouteEnterprisePage() {
 		}
 
 		if (!canLeaveFeedback) {
-			toast.info('Начните проходить квест, чтобы оставить отзыв')
+			toast.info('Зарегистрируйтесь на квест, чтобы оставить отзыв')
 			return
 		}
 
@@ -665,7 +660,7 @@ export default function RouteEnterprisePage() {
 								</div>
 							) : (
 								<p className="text-muted-foreground">
-									Начните проходить квест, чтобы оставить
+									Зарегистрируйтесь на квест, чтобы оставить
 									отзыв
 								</p>
 							)}
@@ -953,7 +948,6 @@ export default function RouteEnterprisePage() {
 						<Button
 							onClick={handleSubmitFeedback}
 							disabled={isSubmittingFeedback}
-							className="bg-linear-to-r from-blue-500 to-purple-600"
 						>
 							{isSubmittingFeedback
 								? editingFeedback

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
 	Coins,
 	ExternalLink,
@@ -91,7 +92,13 @@ function getMaxUsableBonuses(
 }
 
 export default function ShopPage() {
-	const { user, mutate: mutateUser } = useUser()
+	const router = useRouter()
+	const {
+		user,
+		isLoading: isUserLoading,
+		isAuthenticated,
+		mutate: mutateUser
+	} = useUser()
 	const [items, setItems] = useState<ShopItemDto[]>([])
 	const [cart, setCart] = useState<ShopCartItemDto[]>([])
 	const [purchases, setPurchases] = useState<ShopPurchaseDto[]>([])
@@ -172,8 +179,18 @@ export default function ShopPage() {
 	}
 
 	useEffect(() => {
+		if (isUserLoading) {
+			return
+		}
+
+		if (!isAuthenticated) {
+			setIsLoading(false)
+			router.replace('/login?next=/shop')
+			return
+		}
+
 		void loadAll()
-	}, [])
+	}, [isAuthenticated, isUserLoading, router])
 
 	useEffect(() => {
 		setBuyUsedBonuses((prev) =>
@@ -277,6 +294,10 @@ export default function ShopPage() {
 		)
 		setIsBuyDialogOpen(false)
 		await handleBuy(buyItem.id, normalizedQuantity, normalizedUsedBonuses)
+	}
+
+	if (!isUserLoading && !isAuthenticated) {
+		return null
 	}
 
 	return (
