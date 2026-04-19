@@ -59,12 +59,23 @@ import {
 	getTodayDailyQuestions,
 	type DailyQuestionDto
 } from '@/shared/api/daily-questions'
+import { useUser } from '@/shared/hooks/use-user'
 import { QrScanner } from '@/widgets/quest/qr-scanner'
 import { QuestCard } from '@/widgets/quest-card'
 import { EventsCalendarEmbed } from '@/widgets/events/events-calendar-embed'
 
 const QUEST_START_ERROR_MESSAGE =
 	'Не получилось отсканировать и начать прохождение квеста предприятия'
+const DAILY_TEST_PROGRESS_STORAGE_PREFIX = 'daily-test-progress'
+
+type DailyResult = 'correct' | 'wrong'
+
+type DailyTestProgress = {
+	date: string
+	answers: Record<string, string>
+	results: Record<string, DailyResult>
+	completed: boolean
+}
 
 function getLocalDateIso(): string {
 	const now = new Date()
@@ -76,6 +87,7 @@ function getLocalDateIso(): string {
 
 export default function HomePage() {
 	const router = useRouter()
+	const { user, isLoading: isUserLoading, isAuthenticated } = useUser()
 	const [quests, setQuests] = useState<QuestDto[]>([])
 	const [questCategories, setQuestCategories] = useState<QuestCategory[]>([])
 	const [isLoadingQuests, setIsLoadingQuests] = useState(true)
@@ -96,15 +108,42 @@ export default function HomePage() {
 	>(null)
 	const [dailyAnswers, setDailyAnswers] = useState<Record<string, string>>({})
 	const [dailyResults, setDailyResults] = useState<
-		Record<string, 'correct' | 'wrong'>
+		Record<string, DailyResult>
 	>({})
 	const [dailySubmittingQuestionId, setDailySubmittingQuestionId] = useState<
 		string | null
 	>(null)
+	const [isDailyTestCompleted, setIsDailyTestCompleted] = useState(false)
 
 	const [enterpriseSearch, setEnterpriseSearch] = useState('')
 	const [enterpriseLevel, setEnterpriseLevel] = useState<string>('all')
 	const [enterpriseCategory, setEnterpriseCategory] = useState<string>('all')
+	const isDailyUserLoading = isAuthenticated && isUserLoading
+	const dailyProgressStorageKey = useMemo(() => {
+		const userKey = isAuthenticated
+			? user?.id || user?.email || 'loading'
+			: 'guest'
+		return `${DAILY_TEST_PROGRESS_STORAGE_PREFIX}:${userKey}:${dailyDate}`
+	}, [dailyDate, isAuthenticated, user?.email, user?.id])
+
+	const saveDailyTestProgress = (
+		answers: Record<string, string>,
+		results: Record<string, DailyResult>,
+		completed: boolean
+	) => {
+		if (typeof window === 'undefined') return
+
+		const progress: DailyTestProgress = {
+			date: dailyDate,
+			answers,
+			results,
+			completed
+		}
+		window.localStorage.setItem(
+			dailyProgressStorageKey,
+			JSON.stringify(progress)
+		)
+	}
 
 	useEffect(() => {
 		let isMounted = true
@@ -129,6 +168,7 @@ export default function HomePage() {
 				setQuestsError(apiError.message)
 				setQuests([])
 				setQuestCategories([])
+				toast.error(apiError.message)
 			} finally {
 				if (isMounted) setIsLoadingQuests(false)
 			}
@@ -141,9 +181,34 @@ export default function HomePage() {
 	}, [])
 
 	useEffect(() => {
-		setDailyAnswers({})
-		setDailyResults({})
-	}, [dailyDate, dailyQuestions.length])
+		if (typeof window === 'undefined') return
+
+		const rawProgress = window.localStorage.getItem(dailyProgressStorageKey)
+
+		if (!rawProgress) {
+			setDailyAnswers({})
+			setDailyResults({})
+			setIsDailyTestCompleted(false)
+			return
+		}
+
+		try {
+			const progress = JSON.parse(rawProgress) as DailyTestProgress
+			const results = progress.results || {}
+			const isCompleted =
+				progress.completed ||
+				(dailyQuestions.length > 0 &&
+					dailyQuestions.every((question) => results[question.id]))
+
+			setDailyAnswers(progress.answers || {})
+			setDailyResults(results)
+			setIsDailyTestCompleted(isCompleted)
+		} catch {
+			setDailyAnswers({})
+			setDailyResults({})
+			setIsDailyTestCompleted(false)
+		}
+	}, [dailyProgressStorageKey, dailyQuestions])
 
 	useEffect(() => {
 		let isMounted = true
@@ -178,6 +243,7 @@ export default function HomePage() {
 				)
 				setDailyQuestionsError(apiError.message)
 				setDailyQuestions([])
+				toast.error(apiError.message)
 			} finally {
 				if (isMounted) setIsLoadingDailyQuestions(false)
 			}
@@ -217,6 +283,7 @@ export default function HomePage() {
 	const passedDailyQuestionsCount = Object.values(dailyResults).filter(
 		(value) => value === 'correct'
 	).length
+	const hasCheckedDailyQuestions = checkedDailyQuestionsCount > 0
 
 	const handleQrCode = async (rawCode: string) => {
 		const normalizedCode = rawCode.trim().toUpperCase()
@@ -256,6 +323,8 @@ export default function HomePage() {
 
 	const handleSelectDailyAnswer = (questionId: string, optionId: string) => {
 		if (
+			isDailyUserLoading ||
+			isDailyTestCompleted ||
 			dailyResults[questionId] ||
 			dailySubmittingQuestionId === questionId
 		)
@@ -264,6 +333,16 @@ export default function HomePage() {
 	}
 
 	const handleCheckDailyAnswer = async (question: DailyQuestionDto) => {
+		if (isDailyUserLoading) {
+			toast.info('Загружаем профиль для ежедневного теста')
+			return
+		}
+
+		if (isDailyTestCompleted) {
+			toast.info('Ежедневный тест уже пройден')
+			return
+		}
+
 		const selectedOptionId = dailyAnswers[question.id]
 
 		if (!selectedOptionId) {
@@ -277,11 +356,24 @@ export default function HomePage() {
 				question_id: question.id,
 				user_answer: selectedOptionId
 			})
-
-			setDailyResults((prev) => ({
-				...prev,
+			const nextResults: Record<string, DailyResult> = {
+				...dailyResults,
 				[question.id]: response.is_correct ? 'correct' : 'wrong'
-			}))
+			}
+			const isCompleted =
+				dailyQuestions.length > 0 &&
+				dailyQuestions.every(
+					(dailyQuestion) => nextResults[dailyQuestion.id]
+				)
+
+			setDailyResults(nextResults)
+			setIsDailyTestCompleted(isCompleted)
+			saveDailyTestProgress(dailyAnswers, nextResults, isCompleted)
+			if (response.is_correct) {
+				toast.success('Ответ засчитан')
+			} else {
+				toast.info('Ответ не засчитан')
+			}
 		} catch (error) {
 			const apiError = normalizeApiError(
 				error,
@@ -294,8 +386,18 @@ export default function HomePage() {
 	}
 
 	const handleResetDailyTest = () => {
+		if (
+			isDailyUserLoading ||
+			isDailyTestCompleted ||
+			hasCheckedDailyQuestions
+		) {
+			toast.info('Проверенные ответы ежедневного теста нельзя сбросить')
+			return
+		}
+
 		setDailyAnswers({})
 		setDailyResults({})
+		toast.info('Ответы ежедневного теста сброшены')
 	}
 
 	return (
@@ -397,7 +499,9 @@ export default function HomePage() {
 							) : (
 								<>
 									<ChevronDown className="mr-2 h-4 w-4" />
-									Пройти тест
+									{isDailyTestCompleted
+										? 'Тест пройден'
+										: 'Пройти тест'}
 								</>
 							)}
 						</Button>
@@ -411,11 +515,19 @@ export default function HomePage() {
 								Проверка знаний
 							</CardTitle>
 							<CardDescription>
-								Вопрос засчитывается только при правильном
-								ответе.
+								{isDailyTestCompleted
+									? 'Ежедневный тест уже пройден. Новый тест будет доступен завтра.'
+									: 'Вопрос засчитывается только при правильном ответе.'}
 							</CardDescription>
 						</CardHeader>
-						<CardContent className="space-y-4">
+						<CardContent
+							className={`space-y-4 ${
+								isDailyTestCompleted
+									? 'pointer-events-none opacity-60'
+									: ''
+							}`}
+							aria-disabled={isDailyTestCompleted}
+						>
 							<div className="flex flex-wrap items-center gap-2">
 								<Badge variant="outline">
 									Проверено: {checkedDailyQuestionsCount}/
@@ -429,6 +541,11 @@ export default function HomePage() {
 									variant="ghost"
 									size="sm"
 									onClick={handleResetDailyTest}
+									disabled={
+										isDailyUserLoading ||
+										isDailyTestCompleted ||
+										hasCheckedDailyQuestions
+									}
 								>
 									<RotateCcw className="mr-2 h-4 w-4" />
 									Сбросить
@@ -486,6 +603,8 @@ export default function HomePage() {
 																			: ''
 																	}`}
 																	disabled={Boolean(
+																		isDailyUserLoading ||
+																		isDailyTestCompleted ||
 																		result ||
 																		dailySubmittingQuestionId ===
 																			question.id
@@ -509,6 +628,8 @@ export default function HomePage() {
 														type="button"
 														size="sm"
 														disabled={Boolean(
+															isDailyUserLoading ||
+															isDailyTestCompleted ||
 															result ||
 															dailySubmittingQuestionId ===
 																question.id
