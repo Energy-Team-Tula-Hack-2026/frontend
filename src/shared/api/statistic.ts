@@ -22,6 +22,8 @@ export type LeaderboardResponse = {
 	users: UserLeaderboardEntry[]
 }
 
+export type LeaderboardPeriod = 'WEAKLY' | 'MONTLY' | 'ALLTIME'
+
 export async function getStatisticMain(): Promise<StatisticMainResponse> {
 	try {
 		const response = await api.get(`${API_PREFIX}/statistic/main`)
@@ -31,9 +33,13 @@ export async function getStatisticMain(): Promise<StatisticMainResponse> {
 	}
 }
 
-export async function getLeaderBoardStatistic(): Promise<LeaderboardResponse> {
+export async function getLeaderBoardStatistic(
+	period: LeaderboardPeriod
+): Promise<LeaderboardResponse> {
 	try {
-		const response = await api.get(`${API_PREFIX}/statistic/leaderboard`)
+		const response = await api.get(`${API_PREFIX}/statistic/leaderboard`, {
+			params: { period }
+		})
 		return response.data
 	} catch (error) {
 		throw normalizeApiError(error, 'Не удалось получить статистику')
