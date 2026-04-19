@@ -477,7 +477,11 @@ export default function RouteEnterprisePage() {
 
 			<section className="rounded-3xl border border-amber-200/70 bg-linear-to-br from-amber-50 via-orange-50 to-emerald-50 p-7 dark:border-amber-800/40 dark:from-zinc-900 dark:via-zinc-900 dark:to-amber-950/20">
 				<div className="bg-background mb-5 overflow-hidden rounded-2xl border">
-					<Carousel className="w-full">
+					<Carousel
+						className="w-full"
+						autoplay={finalQuestImages.length > 1}
+						autoplayInterval={3400}
+					>
 						<CarouselContent className="ml-0">
 							{finalQuestImages.map((imageUrl, index) => (
 								<CarouselItem

@@ -80,7 +80,11 @@ export function ShopItemCard({
 	return (
 		<Card className="overflow-hidden">
 			<div className="relative overflow-hidden border-b">
-				<Carousel className="w-full">
+				<Carousel
+					className="w-full"
+					autoplay={itemImages.length > 1}
+					autoplayInterval={3200}
+				>
 					<CarouselContent className="-ml-0">
 						{itemImages.map((imageUrl, index) => (
 							<CarouselItem
